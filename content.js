@@ -14,7 +14,8 @@ const KEYWORDS = {
     'refund', 'broken', 'doesnt work', "doesn't work", 'not working',
     'disappointed', 'useless', 'waste', 'bug', 'crash', 'error',
     'terrible', 'worst', 'scam', 'awful', 'horrible', 'hate',
-    'frustrated', 'frustrating', 'fails', 'failed', 'failure', 'problem'
+    'frustrated', 'frustrating', 'fails', 'failed', 'failure', 'problem',
+    'blocking', 'timeout', 'server down', 'not working', 'help'
   ],
   QUESTION: [
     'how', 'does it', 'can i', 'will it', 'is there', 'what is',
@@ -40,7 +41,7 @@ const KEYWORDS = {
 
 const PRIORITY = {
   NEGATIVE_TIER3: 100,
-  NEGATIVE: 90,
+  NEGATIVE: 95,
   QUESTION_TIER3: 80,
   QUESTION: 60,
   FEATURE: 40,
@@ -120,7 +121,8 @@ function extractTopic(text) {
   const topicPhrases = [
     'mobile app', 'dark mode', 'zapier', 'integration', 'api',
     'onboarding', 'timeline', 'pricing', 'export', 'import',
-    'notification', 'dashboard', 'analytics', 'support', 'documentation'
+    'notification', 'dashboard', 'analytics', 'support', 'documentation',
+    'airtable', 'notion', 'tutorial', 'workflow', 'setup'
   ];
 
   const lowerText = text.toLowerCase();
@@ -408,10 +410,18 @@ function injectOrbitBar(textarea) {
     const texts = [];
     commentContainer.querySelectorAll('p, div, span').forEach(node => {
       if (node.closest('.reply-form') || node.closest('.comment-actions')) return;
+      if (node.classList && node.classList.toString().includes('orbit')) return;
       const text = node.textContent.trim();
-      if (text.length > 30 && text.length < 500) texts.push(text);
+      if (text.length > 30 && text.length < 500 && !text.includes('Tier')) texts.push(text);
     });
     commentText = texts.sort((a,b) => b.length - a.length)[0] || '';
+  }
+
+  // Fallback: if still empty, try getting from entire container text
+  if (!commentText || commentText.length < 20) {
+    const allText = commentContainer.textContent || '';
+    const lines = allText.split(/\n/).map(l => l.trim()).filter(l => l.length > 30 && l.length < 300);
+    commentText = lines[0] || '';
   }
 
   console.log('ORBIT: Found comment - author:', authorName, 'tier:', tier, 'text:', commentText.substring(0, 50));
