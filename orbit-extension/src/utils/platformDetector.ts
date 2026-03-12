@@ -19,6 +19,28 @@ const PLATFORMS: Map<string, Platform> = new Map([
     },
     detected: false
   }],
+  ['trustpilot.com', {
+    name: 'Review Platform',
+    type: 'review',
+    selectors: {
+      comments: '.review-content, .review-card, [data-review-body]',
+      salesTable: '',
+      priceContainer: '',
+      dashboardContainer: '.dashboard, .business-profile'
+    },
+    detected: false
+  }],
+  ['g2.com', {
+    name: 'Software Reviews',
+    type: 'review',
+    selectors: {
+      comments: '.review-content, .review-body, [data-track-product-review]',
+      salesTable: '',
+      priceContainer: '.pricing-card, .price-attribute',
+      dashboardContainer: '.dashboard, .admin-panel'
+    },
+    detected: false
+  }],
   ['gumroad.com', {
     name: 'Sales Platform',
     type: 'store',

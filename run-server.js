@@ -34,7 +34,4 @@ server.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
 
-setTimeout(() => {
-  server.close();
-  process.exit(0);
-}, 60000);
+console.log('Press Ctrl+C to stop the server');

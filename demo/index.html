@@ -1,12 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AppSumo Partner Dashboard - ORBIT Demo</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #0f1419;
@@ -63,7 +68,9 @@
       transition: color 0.2s;
     }
 
-    .header-link:hover { color: #fff; }
+    .header-link:hover {
+      color: #fff;
+    }
 
     .user-menu {
       display: flex;
@@ -139,7 +146,7 @@
     }
 
     .sidebar-item.active {
-      background: linear-gradient(90deg, rgba(0,212,255,0.15) 0%, transparent 100%);
+      background: linear-gradient(90deg, rgba(0, 212, 255, 0.15) 0%, transparent 100%);
       color: #00d4ff;
       border-left: 3px solid #00d4ff;
       margin-left: -3px;
@@ -185,7 +192,7 @@
 
     .stat-card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
     }
 
     .stat-icon {
@@ -199,10 +206,21 @@
       margin-bottom: 12px;
     }
 
-    .stat-icon.revenue { background: linear-gradient(135deg, #667eea, #764ba2); }
-    .stat-icon.sales { background: linear-gradient(135deg, #f093fb, #f5576c); }
-    .stat-icon.refund { background: linear-gradient(135deg, #4facfe, #00f2fe); }
-    .stat-icon.rating { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+    .stat-icon.revenue {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+    }
+
+    .stat-icon.sales {
+      background: linear-gradient(135deg, #f093fb, #f5576c);
+    }
+
+    .stat-icon.refund {
+      background: linear-gradient(135deg, #4facfe, #00f2fe);
+    }
+
+    .stat-icon.rating {
+      background: linear-gradient(135deg, #43e97b, #38f9d7);
+    }
 
     .stat-value {
       font-size: 28px;
@@ -220,8 +238,13 @@
       margin-top: 8px;
     }
 
-    .stat-change.positive { color: #51cf66; }
-    .stat-change.negative { color: #ff6b6b; }
+    .stat-change.positive {
+      color: #51cf66;
+    }
+
+    .stat-change.negative {
+      color: #ff6b6b;
+    }
 
     /* Section Header */
     .section-header {
@@ -282,14 +305,25 @@
       border-color: #3d4a5c;
     }
 
-    .comment-card[data-type="question"] { border-left: 3px solid #ffd93d; }
-    .comment-card[data-type="review"] { border-left: 3px solid #51cf66; }
-    .comment-card[data-type="issue"] { border-left: 3px solid #ff6b6b; }
-    .comment-card[data-type="positive"] { border-left: 3px solid #00d4ff; }
+    .comment-card[data-type="question"] {
+      border-left: 3px solid #ffd93d;
+    }
+
+    .comment-card[data-type="review"] {
+      border-left: 3px solid #51cf66;
+    }
+
+    .comment-card[data-type="issue"] {
+      border-left: 3px solid #ff6b6b;
+    }
+
+    .comment-card[data-type="positive"] {
+      border-left: 3px solid #00d4ff;
+    }
 
     .comment-card.flagged {
       border-color: #ff6b6b;
-      background: rgba(255,107,107,0.05);
+      background: rgba(255, 107, 107, 0.05);
     }
 
     .comment-card.resolved {
@@ -334,14 +368,37 @@
       font-size: 14px;
     }
 
-    .avatar-1 { background: linear-gradient(135deg, #667eea, #764ba2); }
-    .avatar-2 { background: linear-gradient(135deg, #f093fb, #f5576c); }
-    .avatar-3 { background: linear-gradient(135deg, #4facfe, #00f2fe); }
-    .avatar-4 { background: linear-gradient(135deg, #43e97b, #38f9d7); }
-    .avatar-5 { background: linear-gradient(135deg, #ffd93d, #f59f00); }
-    .avatar-6 { background: linear-gradient(135deg, #ff6b6b, #c92a2a); }
-    .avatar-7 { background: linear-gradient(135deg, #845ef7, #5f3dc4); }
-    .avatar-8 { background: linear-gradient(135deg, #20c997, #12b886); }
+    .avatar-1 {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+    }
+
+    .avatar-2 {
+      background: linear-gradient(135deg, #f093fb, #f5576c);
+    }
+
+    .avatar-3 {
+      background: linear-gradient(135deg, #4facfe, #00f2fe);
+    }
+
+    .avatar-4 {
+      background: linear-gradient(135deg, #43e97b, #38f9d7);
+    }
+
+    .avatar-5 {
+      background: linear-gradient(135deg, #ffd93d, #f59f00);
+    }
+
+    .avatar-6 {
+      background: linear-gradient(135deg, #ff6b6b, #c92a2a);
+    }
+
+    .avatar-7 {
+      background: linear-gradient(135deg, #845ef7, #5f3dc4);
+    }
+
+    .avatar-8 {
+      background: linear-gradient(135deg, #20c997, #12b886);
+    }
 
     .author-info h4 {
       font-size: 14px;
@@ -366,9 +423,20 @@
       font-weight: 600;
     }
 
-    .tier-1 { background: rgba(255,107,107,0.2); color: #ff6b6b; }
-    .tier-2 { background: rgba(255,217,61,0.2); color: #ffd93d; }
-    .tier-3 { background: rgba(0,212,255,0.2); color: #00d4ff; }
+    .tier-1 {
+      background: rgba(255, 107, 107, 0.2);
+      color: #ff6b6b;
+    }
+
+    .tier-2 {
+      background: rgba(255, 217, 61, 0.2);
+      color: #ffd93d;
+    }
+
+    .tier-3 {
+      background: rgba(0, 212, 255, 0.2);
+      color: #00d4ff;
+    }
 
     .flag-badge {
       background: #ff6b6b;
@@ -434,8 +502,15 @@
     }
 
     @keyframes slideDown {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .reply-form textarea {
@@ -515,8 +590,13 @@
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
     }
 
     /* Sales Table */
@@ -570,9 +650,20 @@
       font-weight: 500;
     }
 
-    .product-pro { background: rgba(0,212,255,0.2); color: #00d4ff; }
-    .product-team { background: rgba(102,126,234,0.2); color: #667eea; }
-    .product-enterprise { background: rgba(132,94,247,0.2); color: #845ef7; }
+    .product-pro {
+      background: rgba(0, 212, 255, 0.2);
+      color: #00d4ff;
+    }
+
+    .product-team {
+      background: rgba(102, 126, 234, 0.2);
+      color: #667eea;
+    }
+
+    .product-enterprise {
+      background: rgba(132, 94, 247, 0.2);
+      color: #845ef7;
+    }
 
     .revenue-cell {
       font-weight: 600;
@@ -657,7 +748,7 @@
 
     .deal-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 12px 32px rgba(0,0,0,0.3);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
     }
 
     .deal-header {
@@ -739,6 +830,7 @@
     }
   </style>
 </head>
+
 <body>
   <!-- Header -->
   <header class="header">
@@ -806,7 +898,7 @@
 
     <!-- Main Content -->
     <main class="main-content">
-      
+
       <!-- ORBIT Banner -->
       <div class="orbit-banner">
         <div class="orbit-banner-icon">🚀</div>
@@ -825,28 +917,28 @@
 
         <div class="stats-grid">
           <div class="stat-card">
-            <div class="stat-icon revenue">💵</div>
-            <div class="stat-value">$24,580</div>
-            <div class="stat-label">Total Revenue</div>
-            <div class="stat-change positive">↑ 12.5% from last month</div>
+            <div class="stat-icon replies">💬</div>
+            <div class="stat-value" id="orbit-replies-generated">0</div>
+            <div class="stat-label">Replies Generated</div>
+            <div class="stat-change positive">↑ AI-powered responses</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon sales">🛒</div>
-            <div class="stat-value">1,247</div>
-            <div class="stat-label">Total Sales</div>
-            <div class="stat-change positive">↑ 8.3% from last month</div>
+            <div class="stat-icon time">⏱️</div>
+            <div class="stat-value" id="orbit-time-saved">0m</div>
+            <div class="stat-label">Time Saved (Minutes/Hours)</div>
+            <div class="stat-change positive">↑ Based on 3min per reply</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon refund">↩️</div>
-            <div class="stat-value">8.5%</div>
-            <div class="stat-label">Refund Rate</div>
-            <div class="stat-change negative">↑ 1.2% from last month</div>
+            <div class="stat-icon risk">⚠️</div>
+            <div class="stat-value" id="orbit-risks-caught">0</div>
+            <div class="stat-label">Refund Risks Caught</div>
+            <div class="stat-change positive">↑ High-risk alerts</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon rating">⭐</div>
-            <div class="stat-value">4.8</div>
-            <div class="stat-label">Average Rating</div>
-            <div class="stat-change positive">↑ 0.2 from last month</div>
+            <div class="stat-icon comments">📊</div>
+            <div class="stat-value" id="orbit-comments-analyzed">0</div>
+            <div class="stat-label">Comments Analyzed</div>
+            <div class="stat-change positive">↑ Total scanned</div>
           </div>
         </div>
       </section>
@@ -1047,6 +1139,8 @@
     </main>
   </div>
 
-  <script src="app.js"></script>
+  <script src="/demo/app.js"></script>
+  <script src="/orbit-extension/content.js"></script>
 </body>
+
 </html>

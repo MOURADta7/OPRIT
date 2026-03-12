@@ -58,12 +58,20 @@ async function handleGenerateReply(data: any) {
   try {
     const { comment, customerName, context } = data;
     
+    const productContext = await chrome.storage.local.get('orbitProductContext');
+    const { productName, shortDescription } = productContext.orbitProductContext || {};
+    
+    const productIntro = productName 
+      ? `Our product is called "${productName}". ${shortDescription || ''}` 
+      : '';
+    
     const prompt = `Customer comment: "${comment}"
 
 Generate a helpful, professional reply to this customer.`;
 
     const systemContext = `You are a customer support assistant for a digital product. 
 The customer's name is ${customerName || 'there'}.
+${productIntro}
 ${context || ''}
 
 Be friendly, helpful, and concise.`;
@@ -73,10 +81,12 @@ Be friendly, helpful, and concise.`;
     });
     
     // Update stats
-    const stats = await chrome.storage.local.get(['responsesGenerated', 'timeSaved']);
+    const stats = await chrome.storage.local.get(['responsesGenerated', 'timeSaved', 'repliesGenerated', 'timeSavedMinutes']);
     await chrome.storage.local.set({
       responsesGenerated: (stats.responsesGenerated || 0) + 1,
-      timeSaved: (stats.timeSaved || 0) + 5 // Assume 5 min saved per reply
+      repliesGenerated: (stats.repliesGenerated || 0) + 1,
+      timeSaved: (stats.timeSaved || 0) + 5,
+      timeSavedMinutes: (stats.timeSavedMinutes || 0) + 5
     });
     
     return {

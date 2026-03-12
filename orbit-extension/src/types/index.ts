@@ -105,7 +105,7 @@ export interface SentimentPoint {
 // Platform Detection
 export interface Platform {
   name: string;
-  type: 'marketplace' | 'store' | 'platform';
+  type: 'marketplace' | 'store' | 'platform' | 'review';
   selectors: PlatformSelectors;
   detected: boolean;
 }

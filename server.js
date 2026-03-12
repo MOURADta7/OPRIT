@@ -5,11 +5,12 @@ const path = require('path');
 console.log('🚀 Starting ORBIT Local Development Server...\n');
 
 const PORT = 3000;
-const PUBLIC_DIR = path.join(__dirname, 'demo');
+const PUBLIC_DIR = path.join(__dirname); // Serve from project root
 
 // Create demo directory if it doesn't exist
-if (!fs.existsSync(PUBLIC_DIR)) {
-  fs.mkdirSync(PUBLIC_DIR, { recursive: true });
+const DEMO_DIR = path.join(__dirname, 'demo');
+if (!fs.existsSync(DEMO_DIR)) {
+  fs.mkdirSync(DEMO_DIR, { recursive: true });
 }
 
 // MIME types
@@ -28,17 +29,17 @@ const mimeTypes = {
 // HTTP Server
 const server = http.createServer((req, res) => {
   // Parse URL
-  let filePath = path.join(PUBLIC_DIR, req.url === '/' ? 'index.html' : req.url);
-  
+  let filePath = path.join(PUBLIC_DIR, req.url === '/' ? 'demo/index.html' : req.url);
+
   // Default to index.html for directories
   if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
     filePath = path.join(filePath, 'index.html');
   }
-  
+
   // Get extension
   const ext = path.extname(filePath).toLowerCase();
   const contentType = mimeTypes[ext] || 'application/octet-stream';
-  
+
   // Read file
   fs.readFile(filePath, (err, content) => {
     if (err) {
@@ -82,7 +83,7 @@ const server = http.createServer((req, res) => {
       }
     } else {
       // Success
-      res.writeHead(200, { 
+      res.writeHead(200, {
         'Content-Type': contentType,
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -98,7 +99,7 @@ server.listen(PORT, () => {
   console.log(`✅ ORBIT Server running at:`);
   console.log(`   http://localhost:${PORT}`);
   console.log(`   http://127.0.0.1:${PORT}`);
-  console.log(`\n📁 Serving files from: ${PUBLIC_DIR}`);
+  console.log(`\n📁 Serving files from: ${PUBLIC_DIR} (project root)`);
   console.log(`\n🔧 Development features:`);
   console.log(`   • Hot reload enabled`);
   console.log(`   • CORS headers configured`);

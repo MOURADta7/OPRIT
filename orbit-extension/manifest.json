@@ -1,61 +1,61 @@
 {
   "manifest_version": 3,
-  "name": "ORBIT - AI Command Center",
+  "name": "ORBIT - AI Command Center for Digital Sales",
   "version": "1.0.0",
-  "description": "Transform your sales dashboard into an AI-powered command center. Privacy-first, locally processed.",
+  "description": "Privacy-first AI assistant for marketplace dashboards. Automate responses, analyze sales, and identify opportunities - all local.",
   "permissions": [
     "storage",
     "activeTab",
     "scripting"
   ],
   "host_permissions": [
-    "https://api.openai.com/*",
-    "https://api.anthropic.com/*",
-    "https://generativelanguage.googleapis.com/*",
-    "https://api.groq.com/*",
-    "*://*.appsumo.com/*",
-    "*://*.gumroad.com/*",
-    "*://*.lemonsqueezy.com/*",
-    "*://*.shopify.com/*"
+    "https://appsumo.com/*",
+    "https://*.appsumo.com/*",
+    "https://gumroad.com/*",
+    "https://*.gumroad.com/*",
+    "https://app.lemonsqueezy.com/*",
+    "https://*.lemonsqueezy.com/*",
+    "https://*.shopify.com/*",
+    "https://*.myshopify.com/*",
+    "http://localhost:*/*"
   ],
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
       "matches": [
-        "*://*.appsumo.com/*",
-        "*://*.gumroad.com/*",
-        "*://*.lemonsqueezy.com/*",
-        "*://*.shopify.com/*",
-        "*://localhost/*"
+        "https://appsumo.com/*",
+        "https://*.appsumo.com/*",
+        "https://gumroad.com/*",
+        "https://*.gumroad.com/*",
+        "https://app.lemonsqueezy.com/*",
+        "http://localhost:*/*"
       ],
-      "js": ["library.js", "content.js"],
-      "css": ["content.css"],
-      "run_at": "document_idle"
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_end"
     }
   ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "icons/icon16.svg",
+      "32": "icons/icon32.svg",
+      "48": "icons/icon48.svg",
+      "128": "icons/icon128.svg"
     }
   },
   "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+    "16": "icons/icon16.svg",
+    "32": "icons/icon32.svg",
+    "48": "icons/icon48.svg",
+    "128": "icons/icon128.svg"
   },
   "web_accessible_resources": [
     {
-      "resources": ["overlay.html", "styles.css"],
+      "resources": ["icons/*"],
       "matches": ["<all_urls>"]
     }
-  ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
-  }
+  ]
 }

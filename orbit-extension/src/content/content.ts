@@ -6,6 +6,79 @@
 import { PlatformDetector } from '../utils/platformDetector';
 import { logger } from '../utils/logger';
 
+type PlatformType = 'APPSUMO' | 'TRUSTPILOT' | 'G2' | 'GENERIC';
+
+function detectPlatform(): PlatformType {
+  const url = window.location.href.toLowerCase();
+  
+  if (url.includes('appsumo.com')) {
+    return 'APPSUMO';
+  }
+  if (url.includes('trustpilot.com')) {
+    return 'TRUSTPILOT';
+  }
+  if (url.includes('g2.com')) {
+    return 'G2';
+  }
+  return 'GENERIC';
+}
+
+function calculateRefundRisk(text: string, _type: string): { risk: number; isCritical: boolean } {
+  const lowerText = text.toLowerCase();
+  const platform = detectPlatform();
+  
+  let risk = 0;
+  
+  const baseKeywords: { keyword: string; weight: number }[] = [
+    { keyword: 'refund', weight: 30 },
+    { keyword: '60 day', weight: 25 },
+    { keyword: 'lifetime', weight: 20 }
+  ];
+  
+  const trustpilotKeywords: { keyword: string; weight: number }[] = [
+    { keyword: 'scam', weight: 40 },
+    { keyword: 'fraud', weight: 45 },
+    { keyword: 'avoid', weight: 35 },
+    { keyword: 'reported', weight: 30 },
+    { keyword: 'fake', weight: 35 }
+  ];
+  
+  const g2Keywords: { keyword: string; weight: number }[] = [
+    { keyword: 'cancel subscription', weight: 35 },
+    { keyword: 'switching', weight: 25 },
+    { keyword: 'competitor', weight: 20 }
+  ];
+  
+  for (const { keyword, weight } of baseKeywords) {
+    if (lowerText.includes(keyword)) {
+      risk += weight;
+    }
+  }
+  
+  if (platform === 'TRUSTPILOT') {
+    for (const { keyword, weight } of trustpilotKeywords) {
+      if (lowerText.includes(keyword)) {
+        risk += weight;
+      }
+    }
+  }
+  
+  if (platform === 'G2') {
+    for (const { keyword, weight } of g2Keywords) {
+      if (lowerText.includes(keyword)) {
+        risk += weight;
+      }
+    }
+  }
+  
+  risk = Math.min(risk, 100);
+  
+  return {
+    risk,
+    isCritical: risk >= 50
+  };
+}
+
 // Check if we're on a supported platform
 if (PlatformDetector.isSupported()) {
   logger.info('ORBIT content script loaded on supported platform');
@@ -16,9 +89,32 @@ if (PlatformDetector.isSupported()) {
   logger.info('Platform not supported, ORBIT inactive');
 }
 
+function highlightTier3Rows() {
+  const url = window.location.href;
+  const isCommentsPage = url.includes('/comments');
+  
+  if (isCommentsPage) return;
+  
+  const isSalesPage = url.includes('/sales') || document.querySelector('table');
+  if (!isSalesPage) return;
+  
+  const rows = document.querySelectorAll('tr');
+  rows.forEach((row) => {
+    if (row.textContent?.includes('Tier 3')) {
+      (row as HTMLElement).style.borderLeft = '3px solid #f59e0b';
+    }
+  });
+}
+
 function initializeOrbit() {
   // Inject floating widget
   injectWidget();
+  
+  // Inject settings panel
+  injectSettingsPanel();
+  
+  // Highlight Tier 3 rows on Sales page only
+  highlightTier3Rows();
   
   // Watch for dynamic content
   observePageChanges();
@@ -103,6 +199,20 @@ function injectWidget() {
           align-items: center;
           gap: 8px;
         ">🔍 Keywords</button>
+
+        <button id="orbit-settings" style="
+          padding: 10px 16px;
+          background: #252b47;
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 8px;
+          color: white;
+          font-size: 13px;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        ">⚙️ Settings</button>
       </div>
       
       <div style="
@@ -139,6 +249,10 @@ function injectWidget() {
   
   widget.querySelector('#orbit-keywords')?.addEventListener('click', () => {
     analyzeKeywords();
+  });
+  
+  widget.querySelector('#orbit-settings')?.addEventListener('click', () => {
+    injectSettingsPanel();
   });
   
   // Update stats periodically
@@ -203,6 +317,150 @@ function showAnalyticsPanel() {
   
   panel.querySelector('#orbit-close-analytics')?.addEventListener('click', () => {
     panel.remove();
+  });
+}
+
+async function injectSettingsPanel() {
+  const existingPanel = document.getElementById('orbit-settings-panel');
+  if (existingPanel) {
+    existingPanel.remove();
+  }
+  
+  const stored = await chrome.storage.local.get('orbitProductContext');
+  const productContext = stored.orbitProductContext || { productName: '', shortDescription: '' };
+  
+  const panel = document.createElement('div');
+  panel.id = 'orbit-settings-panel';
+  panel.innerHTML = `
+    <div style="
+      position: fixed;
+      top: 20px;
+      right: 260px;
+      width: 380px;
+      max-height: 80vh;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      z-index: 999999;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    ">
+      <div style="
+        padding: 16px;
+        background: #1a1f36;
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      ">
+        <h3 style="margin: 0; font-size: 16px;">⚙️ Product Settings</h3>
+        <button id="orbit-close-settings" style="
+          background: none;
+          border: none;
+          color: white;
+          font-size: 20px;
+          cursor: pointer;
+        ">×</button>
+      </div>
+      <div style="padding: 16px; overflow-y: auto;">
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #374151;">
+            Product Name
+          </label>
+          <input 
+            id="orbit-product-name" 
+            type="text" 
+            value="${productContext.productName || ''}"
+            placeholder="e.g., My Awesome App"
+            style="
+              width: 100%;
+              padding: 10px 12px;
+              border: 1px solid #d1d5db;
+              border-radius: 6px;
+              font-size: 14px;
+              box-sizing: border-box;
+            "
+          />
+        </div>
+        
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #374151;">
+            Short Description (1-2 sentences)
+          </label>
+          <textarea 
+            id="orbit-product-description" 
+            rows="3"
+            placeholder="e.g., A powerful tool that helps automate your workflow and save time."
+            style="
+              width: 100%;
+              padding: 10px 12px;
+              border: 1px solid #d1d5db;
+              border-radius: 6px;
+              font-size: 14px;
+              font-family: inherit;
+              resize: vertical;
+              box-sizing: border-box;
+            "
+          >${productContext.shortDescription || ''}</textarea>
+        </div>
+        
+        <button 
+          id="orbit-save-settings"
+          style="
+            width: 100%;
+            padding: 10px 16px;
+            background: #00d4ff;
+            color: #1a1f36;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+          "
+        >
+          Save Settings
+        </button>
+        
+        <div id="orbit-settings-message" style="
+          margin-top: 12px;
+          padding: 10px;
+          border-radius: 6px;
+          font-size: 13px;
+          display: none;
+        "></div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(panel);
+  
+  panel.querySelector('#orbit-close-settings')?.addEventListener('click', () => {
+    panel.remove();
+  });
+  
+  panel.querySelector('#orbit-save-settings')?.addEventListener('click', async () => {
+    const productName = (panel.querySelector('#orbit-product-name') as HTMLInputElement)?.value || '';
+    const shortDescription = (panel.querySelector('#orbit-product-description') as HTMLTextAreaElement)?.value || '';
+    
+    await chrome.storage.local.set({
+      orbitProductContext: {
+        productName,
+        shortDescription
+      }
+    });
+    
+    const messageEl = panel.querySelector('#orbit-settings-message') as HTMLElement;
+    if (messageEl) {
+      messageEl.textContent = '✓ Settings saved successfully!';
+      messageEl.style.background = '#d1fae5';
+      messageEl.style.color = '#065f46';
+      messageEl.style.display = 'block';
+      
+      setTimeout(() => {
+        messageEl.style.display = 'none';
+      }, 3000);
+    }
   });
 }
 
@@ -339,7 +597,26 @@ function showReplyModal(_comment: Element, reply: string) {
 
 function analyzeKeywords() {
   logger.info('Analyzing keywords...');
-  // Implementation for keyword analysis
+  
+  const comments = PlatformDetector.extractComments();
+  let highRiskCount = 0;
+  
+  comments.forEach((comment) => {
+    const text = comment.textContent || '';
+    const { risk, isCritical } = calculateRefundRisk(text, 'review');
+    
+    if (isCritical) {
+      highRiskCount++;
+      (comment as HTMLElement).style.borderLeft = '3px solid #ef4444';
+    } else if (risk >= 25) {
+      (comment as HTMLElement).style.borderLeft = '3px solid #f59e0b';
+    }
+  });
+  
+  logger.info(`Found ${highRiskCount} high-risk comments out of ${comments.length}`);
+  
+  const platform = detectPlatform();
+  logger.info(`Current platform: ${platform}`);
 }
 
 function observePageChanges() {

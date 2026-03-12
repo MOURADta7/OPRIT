@@ -57,7 +57,7 @@ function formatBytes(bytes, decimals = 2) {
 
 async function cleanOldBuilds() {
   const zipPath = path.join(__dirname, 'orbit-extension.zip');
-  
+
   if (fs.existsSync(zipPath)) {
     fs.unlinkSync(zipPath);
     log('Old zip archive removed', 'yellow', emoji.clean);
@@ -68,25 +68,25 @@ async function cleanOldBuilds() {
 
 async function runBuild() {
   const packageJsonPath = path.join(__dirname, 'package.json');
-  
+
   if (!fs.existsSync(packageJsonPath)) {
     log('No package.json found, skipping npm build', 'yellow', emoji.warning);
     return;
   }
 
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-  
+
   if (!packageJson.scripts || !packageJson.scripts.build) {
     log('No build script found in package.json, skipping', 'yellow', emoji.warning);
     return;
   }
 
   log('Running npm build...', 'blue', emoji.build);
-  
+
   try {
-    execSync('npm run build', { 
+    execSync('npm run build', {
       stdio: 'inherit',
-      cwd: __dirname 
+      cwd: __dirname
     });
     log('Build completed successfully!', 'green', emoji.check);
   } catch (error) {
@@ -97,9 +97,9 @@ async function runBuild() {
 
 function validateManifest() {
   const manifestPath = path.join(__dirname, 'manifest.json');
-  
+
   log('Validating manifest.json...', 'blue', emoji.info);
-  
+
   if (!fs.existsSync(manifestPath)) {
     throw new Error('manifest.json not found in root directory!');
   }
@@ -113,7 +113,7 @@ function validateManifest() {
 
   const requiredFields = ['manifest_version', 'name', 'version'];
   const missing = requiredFields.filter(field => !manifest[field]);
-  
+
   if (missing.length > 0) {
     throw new Error(`Missing required fields in manifest.json: ${missing.join(', ')}`);
   }
@@ -123,7 +123,7 @@ function validateManifest() {
   }
 
   log(`Manifest valid: ${manifest.name} v${manifest.version}`, 'green', emoji.check);
-  
+
   return manifest;
 }
 
@@ -210,7 +210,7 @@ function checkSize(stats) {
 
 function showUploadSteps() {
   logStep(5, 5, 'Chrome Web Store Upload Steps');
-  
+
   console.log(`
 ${colors.cyan}Follow these steps to upload your extension:${colors.reset}
 
@@ -238,7 +238,7 @@ ${colors.yellow}⚠️  Note: Review typically takes 1-3 business days${colors.r
 
 async function main() {
   const startTime = Date.now();
-  
+
   console.log(`\n${colors.magenta}${'═'.repeat(60)}${colors.reset}`);
   console.log(`${colors.bright}  ${emoji.rocket} ORBIT Extension Build & Package Tool ${emoji.rocket}${colors.reset}`);
   console.log(`${colors.magenta}${'═'.repeat(60)}${colors.reset}\n`);
@@ -266,17 +266,17 @@ async function main() {
 
     // Summary
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    
+
     console.log(`\n${colors.green}${'═'.repeat(60)}${colors.reset}`);
     console.log(`${colors.bright}  ${emoji.check} SUCCESS! Extension packaged successfully! ${emoji.check}${colors.reset}`);
     console.log(`${colors.green}${'═'.repeat(60)}${colors.reset}\n`);
-    
+
     console.log(`${emoji.package}  ${colors.cyan}Output:${colors.reset} orbit-extension.zip`);
     console.log(`${emoji.info}  ${colors.cyan}Name:${colors.reset} ${manifest.name}`);
     console.log(`${emoji.info}  ${colors.cyan}Version:${colors.reset} ${manifest.version}`);
     console.log(`${emoji.size}  ${colors.cyan}Size:${colors.reset} ${formattedSize}`);
     console.log(`${emoji.star}  ${colors.cyan}Time:${colors.reset} ${duration}s`);
-    
+
     console.log(`\n${colors.green}Ready for Chrome Web Store upload!${colors.reset} ${emoji.rocket}\n`);
 
   } catch (error) {

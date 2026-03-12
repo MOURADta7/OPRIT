@@ -3,6 +3,18 @@
 // Comment Data
 const commentsData = [
   {
+    id: 0,
+    author: 'Angry Customer',
+    email: 'angry@customer.com',
+    time: 'Just now',
+    avatar: 9,
+    tier: 1,
+    content: "I am extremely disappointed. This product does not work at all and is a complete waste of money. Please cancel my subscription and issue a full refund immediately!",
+    type: 'issue',
+    resolved: false,
+    flagged: true
+  },
+  {
     id: 1,
     author: 'Sarah Mitchell',
     email: 'sarah@company.com',
@@ -97,6 +109,18 @@ const commentsData = [
     type: 'issue',
     resolved: false,
     flagged: false
+  },
+  {
+    id: 9,
+    author: 'Sophie Durand',
+    email: 'sophie@paris.fr',
+    time: '6 days ago',
+    avatar: 1,
+    tier: 2,
+    content: "Bonjour ! Je suis très intéressée par votre produit mais je ne comprends pas comment configurer l'intégration avec Notion. Est-ce que vous avez une documentation en français? Merci beaucoup!",
+    type: 'question',
+    resolved: false,
+    flagged: false
   }
 ];
 
@@ -113,15 +137,15 @@ document.addEventListener('DOMContentLoaded', () => {
 // Navigation
 function initNavigation() {
   const sidebarItems = document.querySelectorAll('.sidebar-item[data-page]');
-  
+
   sidebarItems.forEach(item => {
     item.addEventListener('click', () => {
       const pageId = item.dataset.page;
-      
+
       // Update active state
       sidebarItems.forEach(i => i.classList.remove('active'));
       item.classList.add('active');
-      
+
       // Show correct section
       document.querySelectorAll('.page-section').forEach(section => {
         section.classList.remove('active');
@@ -139,24 +163,24 @@ function initComments() {
 function renderComments(comments) {
   const container = document.getElementById('comments-container');
   container.innerHTML = comments.map(comment => createCommentCard(comment)).join('');
-  
+
   // Attach event listeners
   container.querySelectorAll('.reply-btn').forEach(btn => {
     btn.addEventListener('click', (e) => toggleReply(e.target));
   });
-  
+
   container.querySelectorAll('.resolve-btn').forEach(btn => {
     btn.addEventListener('click', (e) => markResolved(e.target));
   });
-  
+
   container.querySelectorAll('.flag-btn').forEach(btn => {
     btn.addEventListener('click', (e) => toggleFlag(e.target));
   });
-  
+
   container.querySelectorAll('.btn-post').forEach(btn => {
     btn.addEventListener('click', (e) => postReply(e.target));
   });
-  
+
   container.querySelectorAll('.btn-cancel').forEach(btn => {
     btn.addEventListener('click', (e) => cancelReply(e.target));
   });
@@ -167,7 +191,7 @@ function createCommentCard(comment) {
   const avatarClass = `avatar-${comment.avatar}`;
   const resolvedClass = comment.resolved ? 'resolved' : '';
   const flaggedClass = comment.flagged ? 'flagged' : '';
-  
+
   return `
     <div class="comment-card ${resolvedClass} ${flaggedClass}" data-type="${comment.type}" data-id="${comment.id}">
       <div class="comment-header">
@@ -190,7 +214,7 @@ function createCommentCard(comment) {
         <button class="action-btn flagged-btn ${flaggedClass ? 'active' : ''}">🚩 Flag</button>
       </div>
       <div class="reply-form">
-        <textarea placeholder="Write your reply..."></textarea>
+        <textarea placeholder="Write your reply..." id="orbit-reply-field-${comment.id}" name="orbit-reply"></textarea>
         <div class="reply-form-actions">
           <button class="btn-cancel">Cancel</button>
           <button class="btn-post">Post Reply</button>
@@ -205,7 +229,7 @@ function toggleReply(btn) {
   const commentCard = btn.closest('.comment-card');
   const replyForm = commentCard.querySelector('.reply-form');
   replyForm.classList.toggle('active');
-  
+
   if (replyForm.classList.contains('active')) {
     replyForm.querySelector('textarea').focus();
   }
@@ -216,7 +240,7 @@ function cancelReply(btn) {
   const replyForm = commentCard.querySelector('.reply-form');
   const textarea = replyForm.querySelector('textarea');
   const confirmation = replyForm.querySelector('.reply-confirmation');
-  
+
   replyForm.classList.remove('active');
   textarea.value = '';
   confirmation.classList.remove('show');
@@ -227,9 +251,9 @@ function postReply(btn) {
   const replyForm = commentCard.querySelector('.reply-form');
   const textarea = replyForm.querySelector('textarea');
   const confirmation = replyForm.querySelector('.reply-confirmation');
-  
+
   const replyText = textarea.value.trim();
-  
+
   if (!replyText) {
     textarea.style.borderColor = '#ff6b6b';
     setTimeout(() => {
@@ -237,10 +261,10 @@ function postReply(btn) {
     }, 1000);
     return;
   }
-  
+
   // Show confirmation
   confirmation.classList.add('show');
-  
+
   // Clear textarea and hide form after delay
   setTimeout(() => {
     textarea.value = '';
@@ -252,7 +276,7 @@ function postReply(btn) {
 function markResolved(btn) {
   const commentCard = btn.closest('.comment-card');
   const commentId = parseInt(commentCard.dataset.id);
-  
+
   const comment = commentsData.find(c => c.id === commentId);
   if (comment) {
     comment.resolved = !comment.resolved;
@@ -264,7 +288,7 @@ function markResolved(btn) {
 function toggleFlag(btn) {
   const commentCard = btn.closest('.comment-card');
   const commentId = parseInt(commentCard.dataset.id);
-  
+
   const comment = commentsData.find(c => c.id === commentId);
   if (comment) {
     comment.flagged = !comment.flagged;
@@ -276,12 +300,12 @@ function toggleFlag(btn) {
 // Filters
 function initFilters() {
   const filterTabs = document.querySelectorAll('.filter-tab');
-  
+
   filterTabs.forEach(tab => {
     tab.addEventListener('click', () => {
       filterTabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-      
+
       const filter = tab.dataset.filter;
       applyCurrentFilter(filter);
     });
@@ -292,11 +316,11 @@ let currentFilter = 'all';
 
 function applyCurrentFilter(filter) {
   currentFilter = filter || currentFilter;
-  
-  const filteredComments = currentFilter === 'all' 
-    ? commentsData 
+
+  const filteredComments = currentFilter === 'all'
+    ? commentsData
     : commentsData.filter(c => c.type === currentFilter);
-  
+
   renderComments(filteredComments);
 }
 
