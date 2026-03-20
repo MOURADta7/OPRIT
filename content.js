@@ -28,7 +28,9 @@ function initializeStorage() {
           analyticsTracking: true,
           emailNotifications: false,
           privacyMode: false,
-          orbitAIEnabled: true
+          orbitAIEnabled: true,
+          webhookUrl: '',
+          webhookEnabled: false
         }
       });
     }
@@ -68,7 +70,9 @@ function getSettings() {
         analyticsTracking: true,
         emailNotifications: false,
         privacyMode: false,
-        orbitAIEnabled: true
+        orbitAIEnabled: true,
+        webhookUrl: '',
+        webhookEnabled: false
       });
     });
   });
@@ -134,6 +138,51 @@ async function saveReplyFeedback(commentText, generatedReply, reason) {
       });
     });
   });
+}
+
+const alertedComments = new Set();
+
+function hashComment(commentText) {
+  let hash = 0;
+  for (let i = 0; i < commentText.length; i++) {
+    const char = commentText.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return hash.toString(36);
+}
+
+async function triggerWebhookAlert(commentText, authorName, refundRisk, platform) {
+  const settings = await getSettings();
+  
+  if (!settings.webhookEnabled || !settings.webhookUrl) {
+    return;
+  }
+  
+  const commentHash = hashComment(commentText);
+  
+  if (alertedComments.has(commentHash)) {
+    return;
+  }
+  
+  alertedComments.add(commentHash);
+  
+  const payload = {
+    text: `🚨 *URGENT: Refund Risk Detected!* 🚨\n*Platform:* ${platform}\n*Customer:* ${authorName}\n*Risk Score:* ${refundRisk}/100\n*Comment:* ${commentText}`
+  };
+  
+  try {
+    await fetch(settings.webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    console.log('ORBIT: Webhook alert sent successfully');
+  } catch (error) {
+    console.error('ORBIT: Webhook alert failed:', error);
+  }
 }
 
 // ============================================================
@@ -279,7 +328,9 @@ let cachedSettings = {
   analyticsTracking: true,
   emailNotifications: false,
   privacyMode: false,
-  orbitAIEnabled: true
+  orbitAIEnabled: true,
+  webhookUrl: '',
+  webhookEnabled: false
 };
 
 // Cache settings on load
@@ -401,6 +452,9 @@ function _buildOrbitBar(textarea, commentContainer, authorName, settings) {
       if (settings.emailNotifications) {
         checkAndTriggerEmailNotification(commentText, refundRisk);
       }
+      
+      // Trigger webhook alert
+      triggerWebhookAlert(commentText, authorName, refundRisk, 'Comments & Reviews');
       
       bar.innerHTML = `
         <style>@keyframes pulseRed { 0% { opacity: 1; box-shadow: 0 0 0 0 rgba(220,38,38,0.7); } 50% { opacity: 0.8; box-shadow: 0 0 0 8px rgba(220,38,38,0); } 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(220,38,38,0); } }</style>
@@ -1025,6 +1079,99 @@ function handleSettingsPage() {
       showOrbitNotification('ORBIT Paused');
     }
   });
+
+  // Team Alerts Section - Webhook Configuration
+  const settingsContainer = document.querySelector('div:has(> span:contains("Configure your dashboard"))');
+  if (!settingsContainer) return;
+
+  if (document.getElementById('orbit-webhook-section')) return;
+
+  const webhookSection = document.createElement('div');
+  webhookSection.id = 'orbit-webhook-section';
+  webhookSection.style.cssText = `
+    background: #1a1a2e; border: 1px solid #2d2d4e; border-radius: 8px;
+    padding: 16px; margin-top: 16px; font-family: sans-serif;
+  `;
+
+  webhookSection.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <span style="color:#00d4ff;font-weight:600;font-size:14px;">Team Alerts</span>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;color:#9ca3af;font-size:12px;margin-bottom:6px;">Slack/Discord Webhook URL</label>
+      <input type="url" id="orbit-webhook-url" placeholder="https://hooks.slack.com/services/..." 
+        style="width:100%;padding:8px 12px;border:1px solid #2d2d4e;border-radius:6px;
+        background:#0d0d1a;color:#e2e8f0;font-size:13px;outline:none;box-sizing:border-box;">
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <span style="color:#9ca3af;font-size:12px;">Enable Webhook Alerts</span>
+      <button id="orbit-webhook-toggle" style="
+        background:#2d2d4e;border:1px solid #4f46e5;border-radius:12px;
+        color:#ef4444;cursor:pointer;font-size:12px;padding:4px 10px;
+      ">OFF</button>
+    </div>
+    <div id="orbit-webhook-status" style="margin-top:8px;font-size:11px;color:#6b7280;"></div>
+  `;
+
+  settingsContainer.appendChild(webhookSection);
+
+  const webhookUrlInput = document.getElementById('orbit-webhook-url');
+  const webhookToggleBtn = document.getElementById('orbit-webhook-toggle');
+  const webhookStatus = document.getElementById('orbit-webhook-status');
+
+  getSettings().then(settings => {
+    if (webhookUrlInput) {
+      webhookUrlInput.value = settings.webhookUrl || '';
+    }
+    updateWebhookToggleState(webhookToggleBtn, settings.webhookEnabled);
+    updateWebhookStatus(webhookStatus, settings.webhookEnabled, settings.webhookUrl);
+  });
+
+  webhookUrlInput.addEventListener('input', async () => {
+    const settings = await getSettings();
+    const newSettings = { ...settings, webhookUrl: webhookUrlInput.value };
+    chrome.storage.local.set({ orbitSettings: newSettings });
+    cachedSettings.webhookUrl = webhookUrlInput.value;
+    updateWebhookStatus(webhookStatus, settings.webhookEnabled, webhookUrlInput.value);
+  });
+
+  webhookToggleBtn.addEventListener('click', async () => {
+    const settings = await getSettings();
+    const newState = !settings.webhookEnabled;
+    
+    const newSettings = { ...settings, webhookEnabled: newState };
+    chrome.storage.local.set({ orbitSettings: newSettings });
+    cachedSettings.webhookEnabled = newState;
+    
+    updateWebhookToggleState(webhookToggleBtn, newState);
+    updateWebhookStatus(webhookStatus, newState, settings.webhookUrl);
+    
+    if (newState) {
+      showOrbitNotification('Webhook alerts enabled');
+    } else {
+      showOrbitNotification('Webhook alerts disabled');
+    }
+  });
+}
+
+function updateWebhookToggleState(btn, enabled) {
+  btn.textContent = enabled ? 'ON' : 'OFF';
+  btn.style.color = enabled ? '#10b981' : '#ef4444';
+  btn.style.borderColor = enabled ? '#4f46e5' : '#ef4444';
+}
+
+function updateWebhookStatus(statusEl, enabled, url) {
+  if (!statusEl) return;
+  if (!url) {
+    statusEl.textContent = 'Enter a webhook URL to enable team alerts';
+    statusEl.style.color = '#f59e0b';
+  } else if (enabled) {
+    statusEl.textContent = 'Active - Alerts will be sent to Slack/Discord';
+    statusEl.style.color = '#10b981';
+  } else {
+    statusEl.textContent = 'Webhook configured - Toggle ON to enable alerts';
+    statusEl.style.color = '#6b7280';
+  }
 }
 
 function updateToggleBtnState(btn, enabled) {
