@@ -119,6 +119,23 @@ async function checkAndTriggerEmailNotification(commentText, refundRisk) {
   return true;
 }
 
+async function saveReplyFeedback(commentText, generatedReply, reason) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get('orbitFailures', (result) => {
+      const failures = result.orbitFailures || [];
+      failures.push({
+        comment: commentText,
+        generatedReply: generatedReply,
+        reason: reason,
+        timestamp: Date.now()
+      });
+      chrome.storage.local.set({ orbitFailures: failures }, () => {
+        resolve();
+      });
+    });
+  });
+}
+
 // ============================================================
 // SECTION 2: SMART LANGUAGE DETECTOR
 // ============================================================
@@ -218,7 +235,7 @@ function calculateRefundRisk(text, type) {
 // SECTION 4: HYBRID REPLY TEMPLATES
 // ============================================================
 
-function generateReply(type, name, commentText) {
+async function generateReply(type, name, commentText) {
   const n = name || 'there';
   const topic = extractTopic(commentText);
 
@@ -444,15 +461,52 @@ function _buildOrbitBar(textarea, commentContainer, authorName, settings) {
     btn.textContent = '⏳ Thinking...';
     btn.disabled = true;
 
-    const replyText = generateReply(type, authorName, commentText);
-    setTextareaValue(textarea, replyText);
+    try {
+      const replyText = await generateReply(type, authorName, commentText);
+      setTextareaValue(textarea, replyText);
 
-    btn.textContent = '✓ Reply Ready';
-    btn.style.background = '#4f46e5';
-    btn.disabled = false;
-    
-    // Track stats
-    incrementReplyStats(false);
+      btn.textContent = '✓ Reply Ready';
+      btn.style.background = '#4f46e5';
+      btn.disabled = false;
+      
+      // Remove any existing feedback buttons
+      const existingFeedback = bar.querySelector('.orbit-feedback-btns');
+      if (existingFeedback) existingFeedback.remove();
+
+      // Add feedback buttons
+      const feedbackDiv = document.createElement('div');
+      feedbackDiv.className = 'orbit-feedback-btns';
+      feedbackDiv.style.cssText = 'display:flex;gap:4px;margin-left:8px;';
+      feedbackDiv.innerHTML = `
+        <button class="orbit-feedback-good" style="background:#10b981;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;font-size:12px;">👍</button>
+        <button class="orbit-feedback-bad" style="background:#ef4444;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;font-size:12px;">👎</button>
+      `;
+      bar.appendChild(feedbackDiv);
+
+      // Handle good feedback
+      feedbackDiv.querySelector('.orbit-feedback-good').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        feedbackDiv.innerHTML = '<span style="color:#10b981;font-size:12px;">Thanks! ✓</span>';
+      });
+
+      // Handle bad feedback
+      feedbackDiv.querySelector('.orbit-feedback-bad').addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const reasons = ['Wrong Tone', 'Hallucination', 'Missed Context', 'Inaccurate', 'Other'];
+        const reason = prompt('Why was this reply not good?\n\nOptions: ' + reasons.join(', '));
+        if (reason) {
+          await saveReplyFeedback(commentText, replyText, reason);
+          feedbackDiv.innerHTML = '<span style="color:#f59e0b;font-size:12px;">Feedback saved! ✓</span>';
+        }
+      });
+      
+      // Track stats
+      incrementReplyStats(false);
+    } catch (err) {
+      console.error('ORBIT: Error generating reply:', err);
+      btn.textContent = '✗ Error';
+      btn.disabled = false;
+    }
   });
   
   updateOrbitDashboard();
@@ -481,10 +535,13 @@ function initOrbitDashboard() {
   panel.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;">
       <span style="font-weight:700;color:#00d4ff;font-size:14px;">🛸 ORBIT AI Assistant</span>
-      <button id="orbit-toggle" title="Toggle ORBIT" style="
-        background:#2d2d4e;border:1px solid #4f46e5;border-radius:12px;
-        color:#10b981;cursor:pointer;font-size:12px;padding:4px 8px;
-      ">ON</button>
+      <div style="display:flex;gap:6px;">
+        <button id="orbit-dash-close" title="Close" style="background:transparent;border:none;color:#9ca3af;cursor:pointer;font-size:16px;padding:0 4px;">×</button>
+        <button id="orbit-toggle" title="Toggle ORBIT" style="
+          background:#2d2d4e;border:1px solid #4f46e5;border-radius:12px;
+          color:#10b981;cursor:pointer;font-size:12px;padding:4px 8px;
+        ">ON</button>
+      </div>
     </div>
     <div id="orbit-dash-stats" style="color:#9ca3af;font-size:12px;">Scanning...</div>
     <div id="orbit-dash-breakdown" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
@@ -493,7 +550,7 @@ function initOrbitDashboard() {
       color: white; border: none; border-radius: 8px; padding: 10px 16px;
       cursor: pointer; font-size: 13px; font-weight: 600; width: 100%;
       transition: opacity 0.2s;
-    ">✨ Auto-Fill All Replies</button>
+    ">✨ Draft All Replies</button>
     <div id="orbit-dash-progress" style="display:none;font-size:11px;color:#10b981;text-align:center;"></div>
   `;
 
@@ -634,7 +691,7 @@ function updateOrbitDashboard() {
   if (autoBtn) {
     autoBtn.textContent = fillable > 0
       ? `✨ Auto-Fill All ${fillable} Replies`
-      : '✨ Auto-Fill All Replies';
+      : '✨ Draft All Replies';
     autoBtn.style.opacity = fillable > 0 ? '1' : '0.5';
   }
 }
@@ -705,9 +762,28 @@ async function orbitBulkFill() {
       const textarea = bar ? bar.nextElementSibling : null;
       if (textarea && textarea.value.trim() === '') {
         if (progressEl) progressEl.textContent = `⚡ Filling reply ${processedCount + 1}...`;
+        
+        // Click and wait for async operation to complete
+        const clickPromise = new Promise((resolve) => {
+          const handler = () => {
+            genBtn.removeEventListener('click', handler);
+            resolve();
+          };
+          genBtn.addEventListener('click', handler);
+        });
         genBtn.click();
+        
+        // Wait for button to be re-enabled (async operation complete)
+        await (async () => {
+          let waited = 0;
+          while (genBtn.disabled && waited < 5000) {
+            await sleep(50);
+            waited += 50;
+          }
+        })();
+        
         processedCount++;
-        await sleep(150); // Stagger before moving to next targeted comment
+        await sleep(200); // Stagger before moving to next targeted comment
       }
     }
   }
@@ -723,7 +799,7 @@ async function orbitBulkFill() {
 
   if (autoBtn) {
     autoBtn.disabled = false;
-    autoBtn.textContent = '✨ Auto-Fill All Replies';
+    autoBtn.textContent = '✨ Draft All Replies';
     updateOrbitDashboard(); // Ensure dashboard reflects newly filled state
   }
 }
@@ -811,20 +887,68 @@ async function initOrbitOnLoad() {
 // SECTION 10: SIMPLE PAGE VISIBILITY CHECK
 // ============================================================
 
-function startPageVisibilityChecker() {
+function handlePageNavigation() {
+  let lastUrl = window.location.href;
+  
   setInterval(() => {
+    if (window.location.href !== lastUrl) {
+      lastUrl = window.location.href;
+      injectedTextareas.clear();
+      if (orbitObserver) {
+        orbitObserver.disconnect();
+        orbitObserver = new MutationObserver(mutations => {
+          const hasStructuralChange = mutations.some(m => m.type === 'childList' && m.addedNodes.length > 0);
+          if (!hasStructuralChange) return;
+          
+          clearTimeout(scanTimeout);
+          scanTimeout = setTimeout(scanAndInject, 500);
+        });
+      }
+    }
+    
     const isCommentsPage = document.body.innerText.includes('Comments & Reviews');
     const panel = document.getElementById('orbit-dashboard');
     
-    if (!panel) return;
+    if (panel) {
+      if (isCommentsPage) {
+        panel.style.display = 'flex';
+        scanForTextareas();
+        updateOrbitDashboard();
+      } else {
+        panel.style.display = 'none';
+      }
+    }
+  }, 1000);
+}
+
+function startPageVisibilityChecker() {
+  let lastUrl = location.href;
+  
+  setInterval(() => {
+    const url = location.href;
+    const isCommentsPage = document.body.innerText.includes('Comments & Reviews') || document.querySelector('.comment-card') !== null;
+    const isOverviewPage = document.body.innerText.includes('Dashboard Overview') || document.getElementById('orbit-replies-generated') !== null;
+    const isSettingsPage = document.body.innerText.includes('Configure your dashboard preferences');
+    
+    const panel = document.getElementById('orbit-dashboard');
     
     if (isCommentsPage) {
-      panel.style.display = 'flex';
+      if (panel && panel.style.display === 'none') {
+        panel.style.display = 'flex';
+      }
       scanForTextareas();
       updateOrbitDashboard();
+    } else if (isOverviewPage) {
+      if (panel) panel.style.display = 'none';
+      updateOverviewStats();
+    } else if (isSettingsPage) {
+      if (panel) panel.style.display = 'none';
+      handleSettingsPage();
     } else {
-      panel.style.display = 'none';
+      if (panel) panel.style.display = 'none';
     }
+    
+    lastUrl = url;
   }, 1000);
 }
 

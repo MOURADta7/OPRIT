@@ -1,1 +1,519 @@
-(()=>{"use strict";const e="orbit_secure_salt_v1_2026";class t{static async encryptKey(t){try{const a=new TextEncoder,r=a.encode(t),o=await this.getKeyMaterial(),n=await crypto.subtle.deriveKey({name:"PBKDF2",salt:a.encode(e),iterations:1e5,hash:"SHA-256"},o,{name:"AES-GCM",length:256},!1,["encrypt"]),s=crypto.getRandomValues(new Uint8Array(12)),i=await crypto.subtle.encrypt({name:"AES-GCM",iv:s},n,r),c=new Uint8Array(s.length+i.byteLength);return c.set(s),c.set(new Uint8Array(i),s.length),btoa(String.fromCharCode(...c))}catch(e){throw console.error("Encryption failed:",e),new Error("Failed to encrypt API key")}}static async decryptKey(t){try{const a=new TextDecoder,r=Uint8Array.from(atob(t),e=>e.charCodeAt(0)),o=r.slice(0,12),n=r.slice(12),s=await this.getKeyMaterial(),i=await crypto.subtle.deriveKey({name:"PBKDF2",salt:(new TextEncoder).encode(e),iterations:1e5,hash:"SHA-256"},s,{name:"AES-GCM",length:256},!1,["decrypt"]),c=await crypto.subtle.decrypt({name:"AES-GCM",iv:o},i,n);return a.decode(c)}catch(e){throw console.error("Decryption failed:",e),new Error("Failed to decrypt API key")}}static async saveApiKey(e,t){const a=await this.encryptKey(t);await chrome.storage.local.set({[`api_${e}`]:a})}static async getApiKey(e){const t=await chrome.storage.local.get(`api_${e}`);if(!t[`api_${e}`])return null;try{return await this.decryptKey(t[`api_${e}`])}catch{return null}}static async deleteApiKey(e){await chrome.storage.local.remove(`api_${e}`)}static async getKeyMaterial(){const e=navigator.userAgent+await this.getInstallTime(),t=new TextEncoder;return crypto.subtle.importKey("raw",t.encode(e),"PBKDF2",!1,["deriveKey"])}static async getInstallTime(){const e=await chrome.storage.local.get("installTime");if(e.installTime)return e.installTime;const t=Date.now().toString();return await chrome.storage.local.set({installTime:t}),t}}const a={openai:{name:"OpenAI GPT-4 Turbo",endpoint:"https://api.openai.com/v1/chat/completions",costPerToken:{input:1e-5,output:.03/1e3}},claude:{name:"Anthropic Claude Sonnet 4",endpoint:"https://api.anthropic.com/v1/messages",costPerToken:{input:3e-6,output:.015/1e3}},gemini:{name:"Google Gemini Pro",endpoint:"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",costPerToken:{input:0,output:0},rateLimit:{requests:1e5,period:"month"}},groq:{name:"Groq Llama 70B",endpoint:"https://api.groq.com/openai/v1/chat/completions",costPerToken:{input:0,output:0},rateLimit:{requests:1e3,period:"day"}}};class r{static async generateReply(e,a,r={}){const{preferredProvider:o,taskComplexity:n="medium",urgency:s=!1}=r,i=await this.getAvailableProviders(),c=await this.getRemainingBudget();if(0===i.length)throw new Error("No API keys configured. Please add an API key in settings.");const l=o||await this.selectOptimalProvider(n,i,c,s),u=await t.getApiKey(l);if(!u)throw new Error(`API key for ${l} not found`);const g=await this.callProvider(l,u,e,a);return await this.trackUsage(l,g.tokens,g.cost),await this.checkBudgetWarnings(l),g}static async selectOptimalProvider(e,t,a,r){if(a<=0){if(t.includes("gemini"))return"gemini";if(t.includes("groq"))return"groq";throw new Error("Budget exhausted. Please add budget or use free models.")}const o=await this.checkRateLimits(t);if(r&&o.includes("groq"))return"groq";switch(e){case"low":if(o.includes("groq"))return"groq";if(o.includes("gemini"))return"gemini";break;case"medium":if(o.includes("gemini"))return"gemini";if(o.includes("groq"))return"groq";if(o.includes("claude"))return"claude";break;case"high":if(o.includes("claude"))return"claude";if(o.includes("openai"))return"openai";if(o.includes("gemini"))return"gemini"}return t[0]}static async callProvider(e,t,r,o){const n=a[e];let s,i,c=n.endpoint;switch(e){case"openai":case"groq":i={Authorization:`Bearer ${t}`,"Content-Type":"application/json"},s={model:"openai"===e?"gpt-4-turbo-preview":"llama-3.1-70b-versatile",messages:[{role:"system",content:o},{role:"user",content:r}],temperature:.7,max_tokens:1e3};break;case"claude":i={"x-api-key":t,"anthropic-version":"2023-06-01","Content-Type":"application/json"},s={model:"claude-sonnet-4-20250514",max_tokens:1e3,messages:[{role:"user",content:`${o}\n\n${r}`}]};break;case"gemini":i={"Content-Type":"application/json"},c=`${n.endpoint}?key=${t}`,s={contents:[{parts:[{text:`${o}\n\n${r}`}]}]};break;default:throw new Error(`Unknown provider: ${e}`)}const l=await fetch(c,{method:"POST",headers:i,body:JSON.stringify(s)});if(!l.ok){const e=await l.text();throw new Error(`API error: ${l.status} - ${e}`)}const u=await l.json();let g,d;switch(e){case"openai":case"groq":g=u.choices[0].message.content,d=u.usage?.total_tokens||Math.ceil((r.length+g.length)/4);break;case"claude":g=u.content[0].text,d=(u.usage?.input_tokens||0)+(u.usage?.output_tokens||0);break;case"gemini":g=u.candidates[0].content.parts[0].text,d=Math.ceil((r.length+g.length)/4);break;default:throw new Error(`Unknown provider: ${e}`)}return{reply:g,cost:d*(n.costPerToken.input+n.costPerToken.output),provider:e,tokens:d}}static async trackUsage(e,t,a){const r=`usage_${(new Date).toISOString().slice(0,7)}`,o=(await chrome.storage.local.get(r))[r]||{};o[e]||(o[e]={tokens:0,cost:0,requests:0,history:[]}),o[e].tokens+=t,o[e].cost+=a,o[e].requests+=1,o[e].history.push({timestamp:Date.now(),tokens:t,cost:a}),o[e].history.length>1e3&&(o[e].history=o[e].history.slice(-1e3)),await chrome.storage.local.set({[r]:o})}static async checkBudgetWarnings(e){const t=await chrome.storage.local.get(["monthlyBudget","warningThreshold"]),a=t.monthlyBudget||10,r=t.warningThreshold||80,o=(new Date).toISOString().slice(0,7),n=await chrome.storage.local.get(`usage_${o}`);if(!n[`usage_${o}`])return;let s=0;Object.values(n[`usage_${o}`]).forEach(e=>{s+=e.cost||0});const i=s/a*100;i>=r&&i<r+5&&chrome.notifications.create({type:"basic",iconUrl:"icons/icon48.png",title:"ORBIT Budget Warning",message:`You've used ${i.toFixed(0)}% of your monthly budget ($${s.toFixed(2)} / $${a})`}),i>=100&&chrome.notifications.create({type:"basic",iconUrl:"icons/icon48.png",title:"ORBIT Budget Exceeded",message:"Your monthly budget has been exceeded. Switching to free models only."})}static async getAvailableProviders(){const e=await chrome.storage.local.get(["api_openai","api_claude","api_gemini","api_groq"]),t=[];return e.api_openai&&t.push("openai"),e.api_claude&&t.push("claude"),e.api_gemini&&t.push("gemini"),e.api_groq&&t.push("groq"),t}static async getRemainingBudget(){const e=(await chrome.storage.local.get("monthlyBudget")).monthlyBudget||10,t=(new Date).toISOString().slice(0,7),a=await chrome.storage.local.get(`usage_${t}`);let r=0;return a[`usage_${t}`]&&Object.values(a[`usage_${t}`]).forEach(e=>{r+=e.cost||0}),e-r}static async checkRateLimits(e){const t=[];for(const r of e){const e=a[r];e.rateLimit?await this.getProviderUsageForPeriod(r,e.rateLimit.period)<e.rateLimit.requests&&t.push(r):t.push(r)}return t}static async getProviderUsageForPeriod(e,t){const a=(new Date).toISOString().slice(0,7),r=await chrome.storage.local.get(`usage_${a}`);if(!r[`usage_${a}`]?.[e])return 0;const o=r[`usage_${a}`][e].history||[],n=Date.now();let s;switch(t){case"hour":s=n-36e5;break;case"day":s=n-864e5;break;case"month":s=new Date((new Date).getFullYear(),(new Date).getMonth(),1).getTime()}return o.filter(e=>e.timestamp>s).length}static getProviderConfig(e){return a[e]}static getAllProviders(){return a}}const o=new class{constructor(){this.level="debug",this.prefix="[ORBIT]"}shouldLog(e){const t={debug:0,info:1,warn:2,error:3};return t[e]>=t[this.level]}log(e,t,...a){if(!this.shouldLog(e))return;const r=(new Date).toISOString(),o=`${this.prefix} [${e.toUpperCase()}] ${r} - ${t}`;switch(e){case"debug":console.debug(o,...a);break;case"info":console.info(o,...a);break;case"warn":console.warn(o,...a);break;case"error":console.error(o,...a)}}debug(e,...t){this.log("debug",e,...t)}info(e,...t){this.log("info",e,...t)}warn(e,...t){this.log("warn",e,...t)}error(e,...t){this.log("error",e,...t)}setLevel(e){this.level=e}};chrome.runtime.onInstalled.addListener(e=>{o.info("ORBIT installed:",e.reason),chrome.storage.local.set({monthlyBudget:10,warningThreshold:80,autoOptimize:!0,preferredTone:"friendly",installTime:Date.now()})}),chrome.runtime.onMessage.addListener((e,t,a)=>{switch(o.info("Background received message:",e.action),e.action){case"generateReply":return async function(e){try{const{comment:t,customerName:a,context:o}=e,n=`Customer comment: "${t}"\n\nGenerate a helpful, professional reply to this customer.`,s=`You are a customer support assistant for a digital product. \nThe customer's name is ${a||"there"}.\n${o||""}\n\nBe friendly, helpful, and concise.`,i=await r.generateReply(n,s,{taskComplexity:"medium"}),c=await chrome.storage.local.get(["responsesGenerated","timeSaved"]);return await chrome.storage.local.set({responsesGenerated:(c.responsesGenerated||0)+1,timeSaved:(c.timeSaved||0)+5}),{success:!0,reply:i.reply,cost:i.cost,provider:i.provider}}catch(e){return o.error("Generate reply error:",e),{success:!1,error:e.message||"Failed to generate reply"}}}(e.data).then(a),!0;case"analyzeSales":return async function(e){try{if(!e||0===e.length)return{success:!1,error:"No sales data provided"};const t=e.reduce((e,t)=>{const a=parseFloat(t.amount?.replace(/[^0-9.]/g,"")||0);return e+(isNaN(a)?0:a)},0),a=e.length,o=`Analyze this sales data and provide insights:\nTotal Revenue: $${t}\nTotal Sales: ${a}\nSample data: ${JSON.stringify(e.slice(0,5))}`;return{success:!0,analysis:{summary:(await r.generateReply("Provide a brief analysis of these sales metrics.",o,{taskComplexity:"low"})).reply,totalRevenue:t,totalSales:a,avgOrderValue:t/a}}}catch(e){return o.error("Analyze sales error:",e),{success:!1,error:e.message}}}(e.data).then(a),!0;case"getUsage":return async function(){try{const e=(new Date).toISOString().slice(0,7);return{success:!0,usage:(await chrome.storage.local.get(`usage_${e}`))[`usage_${e}`]||{}}}catch(e){return{success:!1,error:e.message}}}().then(a),!0;case"testApiKey":return async function(e){try{let t,a;switch(e.provider){case"openai":t="https://api.openai.com/v1/models",a={Authorization:`Bearer ${e.key}`};break;case"claude":t="https://api.anthropic.com/v1/models",a={"x-api-key":e.key,"anthropic-version":"2023-06-01"};break;case"gemini":t="https://generativelanguage.googleapis.com/v1beta/models",a={},t+=`?key=${e.key}`;break;case"groq":t="https://api.groq.com/openai/v1/models",a={Authorization:`Bearer ${e.key}`};break;default:return{success:!1,error:"Unknown provider"}}const r=await fetch(t,{headers:a});return{success:r.ok,error:r.ok?void 0:`HTTP ${r.status}`}}catch(e){return{success:!1,error:e.message}}}(e.data).then(a),!0;case"getBudget":return async function(){try{const e=(await chrome.storage.local.get(["monthlyBudget","warningThreshold"])).monthlyBudget||10,t=(new Date).toISOString().slice(0,7),a=await chrome.storage.local.get(`usage_${t}`);let r=0;a[`usage_${t}`]&&Object.values(a[`usage_${t}`]).forEach(e=>{r+=e.cost||0});const o=r/e*100;let n="healthy";return o>=95?n="critical":o>=80&&(n="warning"),{success:!0,budget:{total:e,used:r,remaining:e-r,percentage:o,status:n}}}catch(e){return{success:!1,error:e.message}}}().then(a),!0;default:return a({success:!1,error:"Unknown action"}),!1}}),chrome.tabs.onUpdated.addListener((e,t,a)=>{"complete"===t.status&&a.url&&(["appsumo.com","gumroad.com","lemonsqueezy.com","shopify.com"].some(e=>a.url?.includes(e))?(chrome.action.setBadgeText({text:"●",tabId:e}),chrome.action.setBadgeBackgroundColor({color:"#00d4ff"})):chrome.action.setBadgeText({text:"",tabId:e}))}),chrome.alarms.create("cleanup",{periodInMinutes:60}),chrome.alarms.onAlarm.addListener(e=>{"cleanup"===e.name&&async function(){const e=Date.now()-7776e6,t=await chrome.storage.local.get(null),a=[];for(const[r,o]of Object.entries(t))if(r.startsWith("usage_")){const t=r.replace("usage_","");new Date(t+"-01").getTime()<e&&a.push(r)}a.length>0&&(await chrome.storage.local.remove(a),o.info(`Cleaned up ${a.length} old data entries`))}()})})();
+/******/ (() => { // webpackBootstrap
+/******/ 	"use strict";
+/******/ 	var __webpack_modules__ = ({
+
+/***/ "./src/background/background.ts"
+/*!**************************************!*\
+  !*** ./src/background/background.ts ***!
+  \**************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony import */ var _lib_aiRouter__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../lib/aiRouter */ "./src/lib/aiRouter.ts");
+/* harmony import */ var _utils_logger__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../utils/logger */ "./src/utils/logger.ts");
+/**
+ * Background Service Worker
+ * Handles API calls, message passing, and background tasks
+ */
+
+
+// Initialize on install
+chrome.runtime.onInstalled.addListener((details) => {
+    _utils_logger__WEBPACK_IMPORTED_MODULE_1__.logger.info('ORBIT installed:', details.reason);
+    // Set default settings
+    chrome.storage.local.set({
+        monthlyBudget: 10,
+        warningThreshold: 80,
+        autoOptimize: true,
+        preferredTone: 'friendly',
+        installTime: Date.now()
+    });
+});
+// Handle messages from content scripts and popup
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+    _utils_logger__WEBPACK_IMPORTED_MODULE_1__.logger.info('Background received message:', request.action);
+    switch (request.action) {
+        case 'generateReply':
+            handleGenerateReply(request.data).then(sendResponse);
+            return true; // Keep channel open for async
+        case 'analyzeSales':
+            handleAnalyzeSales(request.data).then(sendResponse);
+            return true;
+        case 'getUsage':
+            handleGetUsage().then(sendResponse);
+            return true;
+        case 'testApiKey':
+            handleTestApiKey(request.data).then(sendResponse);
+            return true;
+        case 'getBudget':
+            handleGetBudget().then(sendResponse);
+            return true;
+        default:
+            sendResponse({ success: false, error: 'Unknown action' });
+            return false;
+    }
+});
+/**
+ * Generate AI reply for a comment
+ */
+async function handleGenerateReply(data) {
+    try {
+        const { comment, customerName, context } = data;
+        const productContext = await chrome.storage.local.get('orbitProductContext');
+        const { productName, shortDescription } = productContext.orbitProductContext || {};
+        const productIntro = productName
+            ? `Our product is called "${productName}". ${shortDescription || ''}`
+            : '';
+        const prompt = `Customer comment: "${comment}"
+
+Generate a helpful, professional reply to this customer.`;
+        const systemContext = `You are a customer support assistant for a digital product. 
+The customer's name is ${customerName || 'there'}.
+${productIntro}
+${context || ''}
+
+Be friendly, helpful, and concise.`;
+        const result = await _lib_aiRouter__WEBPACK_IMPORTED_MODULE_0__.AIRouter.generateReply(prompt, systemContext, {
+            taskComplexity: 'medium'
+        });
+        // Update stats
+        const stats = await chrome.storage.local.get(['responsesGenerated', 'timeSaved', 'repliesGenerated', 'timeSavedMinutes']);
+        await chrome.storage.local.set({
+            responsesGenerated: (stats.responsesGenerated || 0) + 1,
+            repliesGenerated: (stats.repliesGenerated || 0) + 1,
+            timeSaved: (stats.timeSaved || 0) + 5,
+            timeSavedMinutes: (stats.timeSavedMinutes || 0) + 5
+        });
+        return {
+            success: true,
+            reply: result.reply,
+            cost: result.cost,
+            provider: result.provider
+        };
+    }
+    catch (error) {
+        _utils_logger__WEBPACK_IMPORTED_MODULE_1__.logger.error('Generate reply error:', error);
+        return {
+            success: false,
+            error: error.message || 'Failed to generate reply'
+        };
+    }
+}
+/**
+ * Analyze sales data
+ */
+async function handleAnalyzeSales(data) {
+    try {
+        if (!data || data.length === 0) {
+            return {
+                success: false,
+                error: 'No sales data provided'
+            };
+        }
+        // Calculate basic metrics
+        const totalRevenue = data.reduce((sum, row) => {
+            const amount = parseFloat(row.amount?.replace(/[^0-9.]/g, '') || 0);
+            return sum + (isNaN(amount) ? 0 : amount);
+        }, 0);
+        const totalSales = data.length;
+        const context = `Analyze this sales data and provide insights:
+Total Revenue: $${totalRevenue}
+Total Sales: ${totalSales}
+Sample data: ${JSON.stringify(data.slice(0, 5))}`;
+        const result = await _lib_aiRouter__WEBPACK_IMPORTED_MODULE_0__.AIRouter.generateReply('Provide a brief analysis of these sales metrics.', context, { taskComplexity: 'low' });
+        return {
+            success: true,
+            analysis: {
+                summary: result.reply,
+                totalRevenue,
+                totalSales,
+                avgOrderValue: totalRevenue / totalSales
+            }
+        };
+    }
+    catch (error) {
+        _utils_logger__WEBPACK_IMPORTED_MODULE_1__.logger.error('Analyze sales error:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+/**
+ * Get usage statistics
+ */
+async function handleGetUsage() {
+    try {
+        const month = new Date().toISOString().slice(0, 7);
+        const usage = await chrome.storage.local.get(`usage_${month}`);
+        return {
+            success: true,
+            usage: usage[`usage_${month}`] || {}
+        };
+    }
+    catch (error) {
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+/**
+ * Test API key
+ */
+async function handleTestApiKey(data) {
+    try {
+        // Simple test request
+        let endpoint;
+        let headers;
+        switch (data.provider) {
+            case 'openai':
+                endpoint = 'https://api.openai.com/v1/models';
+                headers = { 'Authorization': `Bearer ${data.key}` };
+                break;
+            case 'claude':
+                endpoint = 'https://api.anthropic.com/v1/models';
+                headers = {
+                    'x-api-key': data.key,
+                    'anthropic-version': '2023-06-01'
+                };
+                break;
+            case 'gemini':
+                endpoint = 'https://generativelanguage.googleapis.com/v1beta/models';
+                headers = {};
+                endpoint += `?key=${data.key}`;
+                break;
+            case 'groq':
+                endpoint = 'https://api.groq.com/openai/v1/models';
+                headers = { 'Authorization': `Bearer ${data.key}` };
+                break;
+            default:
+                return { success: false, error: 'Unknown provider' };
+        }
+        const response = await fetch(endpoint, { headers });
+        return {
+            success: response.ok,
+            error: response.ok ? undefined : `HTTP ${response.status}`
+        };
+    }
+    catch (error) {
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+/**
+ * Get current budget status
+ */
+async function handleGetBudget() {
+    try {
+        const settings = await chrome.storage.local.get(['monthlyBudget', 'warningThreshold']);
+        const budget = settings.monthlyBudget || 10;
+        const month = new Date().toISOString().slice(0, 7);
+        const usageData = await chrome.storage.local.get(`usage_${month}`);
+        let totalCost = 0;
+        if (usageData[`usage_${month}`]) {
+            Object.values(usageData[`usage_${month}`]).forEach((p) => {
+                totalCost += p.cost || 0;
+            });
+        }
+        const percentage = (totalCost / budget) * 100;
+        let status = 'healthy';
+        if (percentage >= 95)
+            status = 'critical';
+        else if (percentage >= 80)
+            status = 'warning';
+        return {
+            success: true,
+            budget: {
+                total: budget,
+                used: totalCost,
+                remaining: budget - totalCost,
+                percentage,
+                status
+            }
+        };
+    }
+    catch (error) {
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+// Tab change listener
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'complete' && tab.url) {
+        // Check if we're on a supported platform
+        const supportedDomains = ['appsumo.com', 'gumroad.com', 'lemonsqueezy.com', 'shopify.com'];
+        const isSupported = supportedDomains.some(domain => tab.url?.includes(domain));
+        if (isSupported) {
+            chrome.action.setBadgeText({ text: '●', tabId });
+            chrome.action.setBadgeBackgroundColor({ color: '#00d4ff' });
+        }
+        else {
+            chrome.action.setBadgeText({ text: '', tabId });
+        }
+    }
+});
+// Periodic cleanup
+chrome.alarms.create('cleanup', { periodInMinutes: 60 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'cleanup') {
+        // Clean up old data (keep last 90 days)
+        cleanupOldData();
+    }
+});
+async function cleanupOldData() {
+    const cutoff = Date.now() - (90 * 24 * 60 * 60 * 1000);
+    const allData = await chrome.storage.local.get(null);
+    const keysToDelete = [];
+    for (const [key, _value] of Object.entries(allData)) {
+        // Delete old usage data
+        if (key.startsWith('usage_')) {
+            const month = key.replace('usage_', '');
+            const monthDate = new Date(month + '-01');
+            if (monthDate.getTime() < cutoff) {
+                keysToDelete.push(key);
+            }
+        }
+    }
+    if (keysToDelete.length > 0) {
+        await chrome.storage.local.remove(keysToDelete);
+        _utils_logger__WEBPACK_IMPORTED_MODULE_1__.logger.info(`Cleaned up ${keysToDelete.length} old data entries`);
+    }
+}
+
+
+/***/ },
+
+/***/ "./src/utils/logger.ts"
+/*!*****************************!*\
+  !*** ./src/utils/logger.ts ***!
+  \*****************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   logger: () => (/* binding */ logger)
+/* harmony export */ });
+/**
+ * Logger Utility
+ * Debug logging with environment-based levels
+ */
+class Logger {
+    constructor() {
+        this.level = 'debug';
+        this.prefix = '[ORBIT]';
+    }
+    shouldLog(level) {
+        const levels = {
+            debug: 0,
+            info: 1,
+            warn: 2,
+            error: 3
+        };
+        return levels[level] >= levels[this.level];
+    }
+    log(level, message, ...args) {
+        if (!this.shouldLog(level))
+            return;
+        const timestamp = new Date().toISOString();
+        const fullMessage = `${this.prefix} [${level.toUpperCase()}] ${timestamp} - ${message}`;
+        switch (level) {
+            case 'debug':
+                console.debug(fullMessage, ...args);
+                break;
+            case 'info':
+                console.info(fullMessage, ...args);
+                break;
+            case 'warn':
+                console.warn(fullMessage, ...args);
+                break;
+            case 'error':
+                console.error(fullMessage, ...args);
+                break;
+        }
+    }
+    debug(message, ...args) {
+        this.log('debug', message, ...args);
+    }
+    info(message, ...args) {
+        this.log('info', message, ...args);
+    }
+    warn(message, ...args) {
+        this.log('warn', message, ...args);
+    }
+    error(message, ...args) {
+        this.log('error', message, ...args);
+    }
+    setLevel(level) {
+        this.level = level;
+    }
+}
+const logger = new Logger();
+
+
+/***/ }
+
+/******/ 	});
+/************************************************************************/
+/******/ 	// The module cache
+/******/ 	var __webpack_module_cache__ = {};
+/******/ 	
+/******/ 	// The require function
+/******/ 	function __webpack_require__(moduleId) {
+/******/ 		// Check if module is in cache
+/******/ 		var cachedModule = __webpack_module_cache__[moduleId];
+/******/ 		if (cachedModule !== undefined) {
+/******/ 			return cachedModule.exports;
+/******/ 		}
+/******/ 		// Check if module exists (development only)
+/******/ 		if (__webpack_modules__[moduleId] === undefined) {
+/******/ 			var e = new Error("Cannot find module '" + moduleId + "'");
+/******/ 			e.code = 'MODULE_NOT_FOUND';
+/******/ 			throw e;
+/******/ 		}
+/******/ 		// Create a new module (and put it into the cache)
+/******/ 		var module = __webpack_module_cache__[moduleId] = {
+/******/ 			// no module.id needed
+/******/ 			// no module.loaded needed
+/******/ 			exports: {}
+/******/ 		};
+/******/ 	
+/******/ 		// Execute the module function
+/******/ 		__webpack_modules__[moduleId](module, module.exports, __webpack_require__);
+/******/ 	
+/******/ 		// Return the exports of the module
+/******/ 		return module.exports;
+/******/ 	}
+/******/ 	
+/******/ 	// expose the modules object (__webpack_modules__)
+/******/ 	__webpack_require__.m = __webpack_modules__;
+/******/ 	
+/************************************************************************/
+/******/ 	/* webpack/runtime/chunk loaded */
+/******/ 	(() => {
+/******/ 		var deferred = [];
+/******/ 		__webpack_require__.O = (result, chunkIds, fn, priority) => {
+/******/ 			if(chunkIds) {
+/******/ 				priority = priority || 0;
+/******/ 				for(var i = deferred.length; i > 0 && deferred[i - 1][2] > priority; i--) deferred[i] = deferred[i - 1];
+/******/ 				deferred[i] = [chunkIds, fn, priority];
+/******/ 				return;
+/******/ 			}
+/******/ 			var notFulfilled = Infinity;
+/******/ 			for (var i = 0; i < deferred.length; i++) {
+/******/ 				var [chunkIds, fn, priority] = deferred[i];
+/******/ 				var fulfilled = true;
+/******/ 				for (var j = 0; j < chunkIds.length; j++) {
+/******/ 					if ((priority & 1 === 0 || notFulfilled >= priority) && Object.keys(__webpack_require__.O).every((key) => (__webpack_require__.O[key](chunkIds[j])))) {
+/******/ 						chunkIds.splice(j--, 1);
+/******/ 					} else {
+/******/ 						fulfilled = false;
+/******/ 						if(priority < notFulfilled) notFulfilled = priority;
+/******/ 					}
+/******/ 				}
+/******/ 				if(fulfilled) {
+/******/ 					deferred.splice(i--, 1)
+/******/ 					var r = fn();
+/******/ 					if (r !== undefined) result = r;
+/******/ 				}
+/******/ 			}
+/******/ 			return result;
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/define property getters */
+/******/ 	(() => {
+/******/ 		// define getter functions for harmony exports
+/******/ 		__webpack_require__.d = (exports, definition) => {
+/******/ 			for(var key in definition) {
+/******/ 				if(__webpack_require__.o(definition, key) && !__webpack_require__.o(exports, key)) {
+/******/ 					Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
+/******/ 				}
+/******/ 			}
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/hasOwnProperty shorthand */
+/******/ 	(() => {
+/******/ 		__webpack_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/make namespace object */
+/******/ 	(() => {
+/******/ 		// define __esModule on exports
+/******/ 		__webpack_require__.r = (exports) => {
+/******/ 			if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+/******/ 				Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+/******/ 			}
+/******/ 			Object.defineProperty(exports, '__esModule', { value: true });
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/jsonp chunk loading */
+/******/ 	(() => {
+/******/ 		// no baseURI
+/******/ 		
+/******/ 		// object to store loaded and loading chunks
+/******/ 		// undefined = chunk not loaded, null = chunk preloaded/prefetched
+/******/ 		// [resolve, reject, Promise] = chunk loading, 0 = chunk loaded
+/******/ 		var installedChunks = {
+/******/ 			"background": 0
+/******/ 		};
+/******/ 		
+/******/ 		// no chunk on demand loading
+/******/ 		
+/******/ 		// no prefetching
+/******/ 		
+/******/ 		// no preloaded
+/******/ 		
+/******/ 		// no HMR
+/******/ 		
+/******/ 		// no HMR manifest
+/******/ 		
+/******/ 		__webpack_require__.O.j = (chunkId) => (installedChunks[chunkId] === 0);
+/******/ 		
+/******/ 		// install a JSONP callback for chunk loading
+/******/ 		var webpackJsonpCallback = (parentChunkLoadingFunction, data) => {
+/******/ 			var [chunkIds, moreModules, runtime] = data;
+/******/ 			// add "moreModules" to the modules object,
+/******/ 			// then flag all "chunkIds" as loaded and fire callback
+/******/ 			var moduleId, chunkId, i = 0;
+/******/ 			if(chunkIds.some((id) => (installedChunks[id] !== 0))) {
+/******/ 				for(moduleId in moreModules) {
+/******/ 					if(__webpack_require__.o(moreModules, moduleId)) {
+/******/ 						__webpack_require__.m[moduleId] = moreModules[moduleId];
+/******/ 					}
+/******/ 				}
+/******/ 				if(runtime) var result = runtime(__webpack_require__);
+/******/ 			}
+/******/ 			if(parentChunkLoadingFunction) parentChunkLoadingFunction(data);
+/******/ 			for(;i < chunkIds.length; i++) {
+/******/ 				chunkId = chunkIds[i];
+/******/ 				if(__webpack_require__.o(installedChunks, chunkId) && installedChunks[chunkId]) {
+/******/ 					installedChunks[chunkId][0]();
+/******/ 				}
+/******/ 				installedChunks[chunkId] = 0;
+/******/ 			}
+/******/ 			return __webpack_require__.O(result);
+/******/ 		}
+/******/ 		
+/******/ 		var chunkLoadingGlobal = self["webpackChunkorbit_extension"] = self["webpackChunkorbit_extension"] || [];
+/******/ 		chunkLoadingGlobal.forEach(webpackJsonpCallback.bind(null, 0));
+/******/ 		chunkLoadingGlobal.push = webpackJsonpCallback.bind(null, chunkLoadingGlobal.push.bind(chunkLoadingGlobal));
+/******/ 	})();
+/******/ 	
+/************************************************************************/
+/******/ 	
+/******/ 	// startup
+/******/ 	// Load entry module and return exports
+/******/ 	// This entry module depends on other loaded chunks and execution need to be delayed
+/******/ 	var __webpack_exports__ = __webpack_require__.O(undefined, ["src_lib_aiRouter_ts"], () => (__webpack_require__("./src/background/background.ts")))
+/******/ 	__webpack_exports__ = __webpack_require__.O(__webpack_exports__);
+/******/ 	
+/******/ })()
+;
+//# sourceMappingURL=background.js.map
