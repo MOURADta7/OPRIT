@@ -17,7 +17,10 @@
     "https://*.lemonsqueezy.com/*",
     "https://*.shopify.com/*",
     "https://*.myshopify.com/*",
-    "http://localhost:*/*"
+    "http://localhost:*/*",
+    "*://hooks.slack.com/*",
+    "*://*.webhook.site/*",
+    "*://*.discord.com/*"
   ],
   "background": {
     "service_worker": "background.js"

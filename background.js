@@ -1,5 +1,5 @@
 // ORBIT Background Service Worker
-// Handles authentication state and basic messaging
+// Handles authentication state, messaging, and webhook requests
 
 console.log('🚀 ORBIT Background Service Worker Initialized');
 
@@ -23,7 +23,7 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// Listen for messages
+// Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Background received:', request.action);
   
@@ -34,6 +34,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   if (request.action === 'getStats') {
     handleGetStats().then(sendResponse);
+    return true;
+  }
+  
+  if (request.action === 'sendWebhook') {
+    handleSendWebhook(request.url, request.payload)
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
 });
@@ -48,6 +55,33 @@ async function handleGetAuthState() {
 async function handleGetStats() {
   const { stats } = await chrome.storage.local.get('stats');
   return { success: true, stats };
+}
+
+// Send webhook alert
+async function handleSendWebhook(url, payload) {
+  if (!url || !payload) {
+    return { success: false, error: 'Missing URL or payload' };
+  }
+  
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    console.log('ORBIT: Webhook sent successfully');
+    return { success: true };
+  } catch (error) {
+    console.error('ORBIT: Webhook failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 console.log('✅ ORBIT Background Service Worker Ready');

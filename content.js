@@ -1,47 +1,104 @@
 // ============================================================
 // ORBIT - Smart Reply Assistant
-// content.js - V5 (Multilingual Upsell + Smart Topics + React Fixes)
+// content.js - V6 (Safe Initialization + Bulletproof SPA Router)
 // ============================================================
 
-console.log('🚀 ORBIT Content Script Loaded (V5 - Ultimate Edition)');
+console.log('🚀 ORBIT Content Script Loaded (V6 - Safe Edition)');
 
 // ============================================================
-// SECTION 0: STORAGE INITIALIZATION
+// SECTION 0: SAFE INITIALIZATION (Critical Fix)
 // ============================================================
 
-function initializeStorage() {
-  chrome.storage.local.get(['orbitStats', 'orbitSettings'], (result) => {
-    if (!result.orbitStats) {
-      chrome.storage.local.set({
-        orbitStats: {
-          repliesGenerated: 0,
-          timeSavedMinutes: 0,
-          risksCaught: 0,
-          commentsAnalyzed: 0
+let isStorageReady = false;
+
+function safeInitialize() {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get(['orbitStats', 'orbitSettings', 'orbitFAQs'], (result) => {
+        try {
+          let needsUpdate = false;
+          const updates = {};
+
+          if (!result.orbitStats) {
+            updates.orbitStats = {
+              repliesGenerated: 0,
+              timeSavedMinutes: 0,
+              risksCaught: 0,
+              commentsAnalyzed: 0
+            };
+            needsUpdate = true;
+          }
+
+          if (!result.orbitSettings) {
+            updates.orbitSettings = {
+              analyticsTracking: true,
+              emailNotifications: false,
+              privacyMode: false,
+              orbitAIEnabled: true,
+              webhookUrl: '',
+              webhookEnabled: false,
+              productName: '',
+              productDescription: ''
+            };
+            needsUpdate = true;
+          }
+
+          if (!result.orbitFAQs) {
+            updates.orbitFAQs = [];
+            needsUpdate = true;
+          }
+
+          if (needsUpdate) {
+            chrome.storage.local.set(updates, () => {
+              console.log('ORBIT: Storage initialized successfully');
+            });
+          }
+
+          isStorageReady = true;
+          onStorageReady();
+        } catch (e) {
+          console.warn('ORBIT: Failed to process storage initialization', e);
         }
       });
+    } else {
+      console.warn('ORBIT: Chrome storage API not available');
     }
-    
-    if (!result.orbitSettings) {
-      chrome.storage.local.set({
-        orbitSettings: {
-          analyticsTracking: true,
-          emailNotifications: false,
-          privacyMode: false,
-          orbitAIEnabled: true,
-          webhookUrl: '',
-          webhookEnabled: false
-        }
-      });
-    }
-  });
+  } catch (e) {
+    console.warn('ORBIT: Failed to access storage during initialization', e);
+  }
 }
 
-initializeStorage();
+function onStorageReady() {
+  console.log('ORBIT: Storage ready, initializing features...');
+  initExtension();
+}
 
-// Use WeakSet to prevent memory leaks and infinite loops
-const injectedTextareas = new WeakSet();
-let orbitObserver = null;
+safeInitialize();
+
+// ============================================================
+// SECTION 0B: POSTMESSAGE LISTENER (Fallback for FAQ saving)
+// ============================================================
+window.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'ORBIT_SAVE_FAQ') {
+    console.log("ORBIT DEBUG: Received FAQ save request via postMessage");
+    const { text, author } = event.data.payload;
+
+    if (!isStorageReady) return;
+
+    const productName = getActiveProduct();
+    
+    chrome.storage.local.get(['orbitFAQs'], (data) => {
+      let faqs = data.orbitFAQs || [];
+      if (!faqs.some(faq => faq.text === text)) {
+        faqs.unshift({ text: text, author: author || 'Customer', product: productName, timestamp: Date.now() });
+        faqs = faqs.slice(0, 10);
+        chrome.storage.local.set({ orbitFAQs: faqs }, () => {
+          console.log("ORBIT DEBUG: FAQ saved via postMessage, product:", productName);
+        });
+      }
+    });
+  }
+});
 
 // ============================================================
 // SECTION 1: CONFIGURATION & KEYWORDS
@@ -60,10 +117,41 @@ const PRIORITY = {
 };
 
 // ============================================================
-// SECTION 2B: SETTINGS & STATS FUNCTIONS
+// SECTION 1B: ACTIVE PRODUCT DETECTOR
+// ============================================================
+
+function getActiveProduct() {
+  const activeSidebarLink = document.querySelector('nav a[class*="bg-gray"], nav a[aria-current="page"], nav a.active, .sidebar a.active, .nav-item.active');
+  
+  if (activeSidebarLink) {
+    const text = activeSidebarLink.textContent.trim();
+    const genericTabs = ['Overview', 'Settings', 'Sales', 'Comments', 'Dashboard', 'Team Alerts'];
+    if (!genericTabs.includes(text)) {
+      return text;
+    }
+  }
+  
+  return "Global";
+}
+
+// ============================================================
+// SECTION 2: SETTINGS & STATS FUNCTIONS (All guarded)
 // ============================================================
 
 function getSettings() {
+  if (!isStorageReady) {
+    return Promise.resolve({
+      analyticsTracking: true,
+      emailNotifications: false,
+      privacyMode: false,
+      orbitAIEnabled: true,
+      webhookUrl: '',
+      webhookEnabled: false,
+      productName: '',
+      productDescription: ''
+    });
+  }
+
   return new Promise((resolve) => {
     chrome.storage.local.get('orbitSettings', (result) => {
       resolve(result.orbitSettings || {
@@ -72,13 +160,24 @@ function getSettings() {
         privacyMode: false,
         orbitAIEnabled: true,
         webhookUrl: '',
-        webhookEnabled: false
+        webhookEnabled: false,
+        productName: '',
+        productDescription: ''
       });
     });
   });
 }
 
 function getStats() {
+  if (!isStorageReady) {
+    return Promise.resolve({
+      repliesGenerated: 0,
+      timeSavedMinutes: 0,
+      risksCaught: 0,
+      commentsAnalyzed: 0
+    });
+  }
+
   return new Promise((resolve) => {
     chrome.storage.local.get('orbitStats', (result) => {
       resolve(result.orbitStats || {
@@ -92,38 +191,144 @@ function getStats() {
 }
 
 async function incrementReplyStats(wasRiskCaught = false) {
-  const settings = await getSettings();
-  if (!settings.analyticsTracking) return;
-  
-  const stats = await getStats();
-  stats.repliesGenerated += 1;
-  stats.timeSavedMinutes += 3;
-  if (wasRiskCaught) {
-    stats.risksCaught += 1;
+  if (!isStorageReady) return;
+
+  try {
+    const settings = await getSettings();
+    if (!settings.analyticsTracking) return;
+
+    const stats = await getStats();
+    stats.repliesGenerated += 1;
+    stats.timeSavedMinutes += 3;
+    if (wasRiskCaught) {
+      stats.risksCaught += 1;
+    }
+
+    await new Promise((resolve) => {
+      chrome.storage.local.set({ orbitStats: stats }, () => {
+        console.log('ORBIT Stats Updated:', stats);
+        resolve();
+      });
+    });
+
+    updateOverviewStatsIfVisible();
+  } catch (e) {
+    console.warn('ORBIT: Failed to increment reply stats', e);
   }
-  chrome.storage.local.set({ orbitStats: stats });
 }
 
-async function incrementCommentsAnalyzed() {
-  const settings = await getSettings();
-  if (!settings.analyticsTracking) return;
-  
-  const stats = await getStats();
-  stats.commentsAnalyzed += 1;
-  chrome.storage.local.set({ orbitStats: stats });
+async function incrementCommentsAnalyzed(isRefundRisk = false) {
+  if (!isStorageReady) return;
+
+  try {
+    const settings = await getSettings();
+    if (!settings.analyticsTracking) return;
+
+    const stats = await new Promise((resolve) => {
+      chrome.storage.local.get('orbitStats', (result) => {
+        resolve(result.orbitStats || {
+          repliesGenerated: 0,
+          timeSavedMinutes: 0,
+          risksCaught: 0,
+          commentsAnalyzed: 0
+        });
+      });
+    });
+
+    stats.commentsAnalyzed = (stats.commentsAnalyzed || 0) + 1;
+
+    if (isRefundRisk) {
+      stats.risksCaught = (stats.risksCaught || 0) + 1;
+    }
+
+    await new Promise((resolve) => {
+      chrome.storage.local.set({ orbitStats: stats }, resolve);
+    });
+
+    updateOverviewStatsIfVisible();
+  } catch (e) {
+    console.warn('ORBIT: Failed to increment comments analyzed', e);
+  }
+}
+
+function captureQuestionFAQ(commentText, authorName) {
+  if (!isStorageReady) return;
+
+  console.log('ORBIT: Capturing FAQ -', commentText.substring(0, 50));
+  chrome.storage.local.get('orbitFAQs', (result) => {
+    let faqs = result.orbitFAQs || [];
+
+    const isDuplicate = faqs.some(faq => faq.text === commentText);
+    if (isDuplicate) {
+      console.log('ORBIT: FAQ duplicate detected, skipping');
+      return;
+    }
+
+    faqs.unshift({
+      text: commentText,
+      author: authorName,
+      timestamp: Date.now()
+    });
+
+    faqs = faqs.slice(0, 10);
+
+    chrome.storage.local.set({ orbitFAQs: faqs }, () => {
+      console.log('ORBIT: FAQ saved successfully, total:', faqs.length);
+    });
+  });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function formatTimeSaved(minutes) {
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+function updateOverviewStatsIfVisible() {
+  if (!isStorageReady) return;
+
+  const isOverviewPage = document.body.innerText.includes('Dashboard Overview') ||
+                         document.querySelector('[data-page="overview"]') !== null;
+  if (isOverviewPage) {
+    const repliesEl = document.getElementById('orbit-replies-generated');
+    const timeEl = document.getElementById('orbit-time-saved');
+    const risksEl = document.getElementById('orbit-risks-caught');
+    const commentsEl = document.getElementById('orbit-comments-analyzed');
+
+    if (repliesEl || timeEl || risksEl || commentsEl) {
+      chrome.storage.local.get('orbitStats', (result) => {
+        const stats = result.orbitStats || { repliesGenerated: 0, timeSavedMinutes: 0, risksCaught: 0, commentsAnalyzed: 0 };
+        if (repliesEl) repliesEl.innerText = stats.repliesGenerated || 0;
+        if (timeEl) timeEl.innerText = formatTimeSaved(stats.timeSavedMinutes || 0);
+        if (risksEl) risksEl.innerText = stats.risksCaught || 0;
+        if (commentsEl) commentsEl.innerText = stats.commentsAnalyzed || 0;
+      });
+    }
+  }
 }
 
 async function checkAndTriggerEmailNotification(commentText, refundRisk) {
   const settings = await getSettings();
   if (!settings.emailNotifications) return false;
   if (refundRisk < 50) return false;
-  
+
   const mailtoLink = `mailto:?subject=${encodeURIComponent('⚠️ ORBIT Alert: Urgent Refund Risk')}&body=${encodeURIComponent(commentText)}`;
   window.location.href = mailtoLink;
   return true;
 }
 
 async function saveReplyFeedback(commentText, generatedReply, reason) {
+  if (!isStorageReady) return;
+
   return new Promise((resolve) => {
     chrome.storage.local.get('orbitFailures', (result) => {
       const failures = result.orbitFailures || [];
@@ -153,63 +358,56 @@ function hashComment(commentText) {
 }
 
 async function triggerWebhookAlert(commentText, authorName, refundRisk, platform) {
+  if (!isStorageReady) return;
+
   const settings = await getSettings();
-  
+
   if (!settings.webhookEnabled || !settings.webhookUrl) {
     return;
   }
-  
+
   const commentHash = hashComment(commentText);
-  
+
   if (alertedComments.has(commentHash)) {
     return;
   }
-  
+
   alertedComments.add(commentHash);
-  
+
   const payload = {
     text: `🚨 *URGENT: Refund Risk Detected!* 🚨\n*Platform:* ${platform}\n*Customer:* ${authorName}\n*Risk Score:* ${refundRisk}/100\n*Comment:* ${commentText}`
   };
-  
-  try {
-    await fetch(settings.webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-    console.log('ORBIT: Webhook alert sent successfully');
-  } catch (error) {
-    console.error('ORBIT: Webhook alert failed:', error);
-  }
+
+  chrome.runtime.sendMessage({
+    action: 'sendWebhook',
+    url: settings.webhookUrl,
+    payload: payload
+  }, (response) => {
+    if (response && response.success) {
+      console.log('ORBIT: Webhook alert sent successfully');
+    } else if (response && response.error) {
+      console.error('ORBIT: Webhook alert failed:', response.error);
+    }
+  });
 }
 
 // ============================================================
-// SECTION 2: SMART LANGUAGE DETECTOR
+// SECTION 2B: LANGUAGE DETECTOR & CLASSIFIER
 // ============================================================
 
 function isEnglish(text) {
-  if (!text || text.trim().length < 4) return true; // Too short to judge, default to English
+  if (!text || text.trim().length < 4) return true;
 
-  // A lightweight list of common English stop words & identifiers
   const engIndicators = /\b(the|is|to|and|a|in|it|you|for|on|with|this|that|of|how|what|when|why|can|will|my|does|any|has|have|but|not|are|be)\b/i;
-
-  // If it has basic English grammar OR contains any of our target keywords, it's English
   const hasBasicEnglish = engIndicators.test(text);
   const hasOrbitKeyword = Object.values(KEYWORDS).flat().some(kw => text.toLowerCase().includes(kw));
 
   return hasBasicEnglish || hasOrbitKeyword;
 }
 
-// ============================================================
-// SECTION 3: CLASSIFIER & TOPIC EXTRACTION
-// ============================================================
-
 function classifyComment(text) {
   if (!text || text.trim().length < 3) return { type: 'NEUTRAL', score: 0 };
 
-  // --- NON-ENGLISH CHECK (The Upsell Trap) ---
   if (!isEnglish(text)) {
     return { type: 'NON_ENGLISH', score: 1 };
   }
@@ -247,7 +445,6 @@ function calculatePriority(type, tier) {
 }
 
 function extractTopic(text) {
-  // Safe Allowlist for SaaS terms
   const topics = [
     'mobile app', 'dark mode', 'notion', 'zapier', 'integration',
     'api', 'onboarding', 'timeline', 'pricing', 'export', 'import',
@@ -264,25 +461,17 @@ function extractTopic(text) {
   return null;
 }
 
-// ============================================================
-// SECTION 3B: REFUND RISK RADAR (V5)
-// ============================================================
-
 function calculateRefundRisk(text, type) {
-    let score = 0;
-    const lower = text.toLowerCase();
-    if (lower.includes('refund')) score += 40;
-    if (lower.includes('60 day') || lower.includes('guarantee')) score += 30;
-    if (lower.includes('disappointed') || lower.includes('not what i expected')) score += 25;
-    if (lower.includes('waste of money') || lower.includes('overpriced')) score += 25;
-    if (lower.includes('cancel') || lower.includes('cancellation')) score += 20;
-    if (type === 'NEGATIVE' && (lower.includes("doesn't work") || lower.includes("doesnt work"))) score += 20;
-    return Math.min(score, 100);
+  let score = 0;
+  const lower = text.toLowerCase();
+  if (lower.includes('refund')) score += 40;
+  if (lower.includes('60 day') || lower.includes('guarantee')) score += 30;
+  if (lower.includes('disappointed') || lower.includes('not what i expected')) score += 25;
+  if (lower.includes('waste of money') || lower.includes('overpriced')) score += 25;
+  if (lower.includes('cancel') || lower.includes('cancellation')) score += 20;
+  if (type === 'NEGATIVE' && (lower.includes("doesn't work") || lower.includes("doesnt work"))) score += 20;
+  return Math.min(score, 100);
 }
-
-// ============================================================
-// SECTION 4: HYBRID REPLY TEMPLATES
-// ============================================================
 
 async function generateReply(type, name, commentText) {
   const n = name || 'there';
@@ -304,7 +493,7 @@ async function generateReply(type, name, commentText) {
 }
 
 // ============================================================
-// SECTION 5: REACT-COMPATIBLE SETTER
+// SECTION 3: REACT-COMPATIBLE SETTER
 // ============================================================
 
 function setTextareaValue(textarea, value) {
@@ -320,9 +509,11 @@ function setTextareaValue(textarea, value) {
 }
 
 // ============================================================
-// SECTION 6: INJECT ORBIT BAR (DOUBLE INJECTION FIXED)
+// SECTION 4: ORBIT BAR INJECTION
 // ============================================================
 
+const injectedTextareas = new WeakSet();
+let orbitObserver = null;
 let commentIndexCounter = 0;
 let cachedSettings = {
   analyticsTracking: true,
@@ -330,31 +521,23 @@ let cachedSettings = {
   privacyMode: false,
   orbitAIEnabled: true,
   webhookUrl: '',
-  webhookEnabled: false
+  webhookEnabled: false,
+  productName: '',
+  productDescription: ''
 };
 
-// Cache settings on load
-chrome.storage.local.get('orbitSettings', (result) => {
-  if (result.orbitSettings) {
-    cachedSettings = result.orbitSettings;
-  }
-});
-
 function injectOrbitBar(textarea) {
-  // 🛡️ Double Injection Guards
+  if (!isStorageReady) return;
   if (injectedTextareas.has(textarea)) return;
   if (!textarea.parentElement || !document.contains(textarea)) return;
-
-  // Check master toggle synchronously using cached settings
   if (!cachedSettings.orbitAIEnabled) return;
-  
+
   _injectOrbitBarInternal(textarea, cachedSettings);
 }
 
 function _injectOrbitBarInternal(textarea, settings) {
-  // Ensure no existing bar is sitting right before this textarea
   if (textarea.parentElement.querySelector('.orbit-reply-assistant')) {
-    injectedTextareas.add(textarea); // Mark as processed so we don't try again
+    injectedTextareas.add(textarea);
     return;
   }
 
@@ -373,22 +556,18 @@ function _injectOrbitBarInternal(textarea, settings) {
 
   let authorName = 'there';
   const extractedName = commentContainer.querySelector('h4, h3, .author-info, .user-name')?.textContent;
-  authorName = extractedName && 
-    extractedName.trim().length > 0 && 
-    extractedName !== 'undefined' && 
-    extractedName !== 'null' 
-    ? extractedName.trim().split(' ')[0] 
+  authorName = extractedName &&
+    extractedName.trim().length > 0 &&
+    extractedName !== 'undefined' &&
+    extractedName !== 'null'
+    ? extractedName.trim().split(' ')[0]
     : 'there';
 
-  // Apply privacy mode - replace author name with Customer # + index
   if (settings.privacyMode) {
     commentIndexCounter++;
     authorName = `Customer #${commentIndexCounter}`;
   }
-  
-  // Track comments analyzed
-  incrementCommentsAnalyzed();
-  
+
   _buildOrbitBar(textarea, commentContainer, authorName, settings);
 }
 
@@ -414,14 +593,65 @@ function _buildOrbitBar(textarea, commentContainer, authorName, settings) {
   let { type } = classifyComment(commentText);
   let priority = calculatePriority(type, tier);
   const refundRisk = calculateRefundRisk(commentText, type);
-  
-  // Override if critical
+
+  let isRefundRisk = false;
   if (refundRisk >= 50) {
-      type = 'CRITICAL';
-      priority = 1000;
+    type = 'CRITICAL';
+    priority = 1000;
+    isRefundRisk = true;
   }
 
   console.warn("🟢 ORBIT_FINAL_DATA >>", { type, priority, authorName, refundRisk });
+
+  incrementCommentsAnalyzed(isRefundRisk);
+
+  const typeStr = String(type).toUpperCase();
+  if (typeStr.includes('QUESTION')) {
+    console.log("ORBIT DEBUG: Caught a question!", commentText.substring(0, 50));
+
+    chrome.storage.local.get(['orbitProducts', 'orbitFAQs'], (data) => {
+      const products = data.orbitProducts || [];
+      const faqs = data.orbitFAQs || [];
+      
+      let productName = 'Global';
+      
+      if (products.length > 0) {
+        const pageTitle = document.querySelector('h1, .page-title, .product-title')?.textContent?.trim();
+        
+        if (pageTitle) {
+          const matchedProduct = products.find(p => 
+            pageTitle.toLowerCase().includes(p.name.toLowerCase()) ||
+            p.name.toLowerCase().includes(pageTitle.toLowerCase())
+          );
+          if (matchedProduct) {
+            productName = matchedProduct.name;
+          } else {
+            const currentUrl = window.location.href;
+            const matchedUrl = products.find(p => currentUrl.includes(p.url) || p.url.includes(currentUrl));
+            if (matchedUrl) {
+              productName = matchedUrl.name;
+            }
+          }
+        } else {
+          const currentUrl = window.location.href;
+          const matchedUrl = products.find(p => currentUrl.includes(p.url) || p.url.includes(currentUrl));
+          if (matchedUrl) {
+            productName = matchedUrl.name;
+          }
+        }
+      }
+
+      if (!faqs.some(faq => faq.text === commentText)) {
+        faqs.unshift({ text: commentText, author: authorName || 'Customer', product: productName, timestamp: Date.now() });
+        faqs = faqs.slice(0, 10);
+        chrome.storage.local.set({ orbitFAQs: faqs }, () => {
+          console.log("ORBIT DEBUG: Saved FAQ for product:", productName);
+        });
+      } else {
+        console.log("ORBIT DEBUG: Duplicate question, skipping");
+      }
+    });
+  }
 
   const TYPE_COLORS = {
     NEGATIVE: '#ef4444',
@@ -429,7 +659,7 @@ function _buildOrbitBar(textarea, commentContainer, authorName, settings) {
     FEATURE: '#8b5cf6',
     POSITIVE_FEATURE: '#f59e0b',
     POSITIVE: '#10b981',
-    NON_ENGLISH: '#ec4899', // Pinkish purple for the upsell
+    NON_ENGLISH: '#ec4899',
     NEUTRAL: '#6b7280'
   };
 
@@ -446,41 +676,35 @@ function _buildOrbitBar(textarea, commentContainer, authorName, settings) {
     gap: 10px; z-index: 9999; font-family: sans-serif; font-size: 13px;
   `;
 
-  // 🚨 Special UI for Critical Refund Risk
   if (type === 'CRITICAL') {
-      // Check email notification setting
-      if (settings.emailNotifications) {
-        checkAndTriggerEmailNotification(commentText, refundRisk);
-      }
-      
-      // Trigger webhook alert
-      triggerWebhookAlert(commentText, authorName, refundRisk, 'Comments & Reviews');
-      
-      bar.innerHTML = `
-        <style>@keyframes pulseRed { 0% { opacity: 1; box-shadow: 0 0 0 0 rgba(220,38,38,0.7); } 50% { opacity: 0.8; box-shadow: 0 0 0 8px rgba(220,38,38,0); } 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(220,38,38,0); } }</style>
-        <span style="background:#4f46e5;color:white;padding:2px 8px;border-radius:4px;font-weight:bold;">ORBIT</span>
-        <span style="background:#dc2626;color:white;padding:2px 8px;border-radius:4px;font-weight:bold;animation: pulseRed 1.5s infinite;">⚠️ REFUND RISK</span>
-        <span style="color:#ef4444;flex:1;font-weight:bold;">URGENT: Score ${refundRisk}/100</span>
-        <button class="orbit-generate-btn" style="background:#dc2626;color:white;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:bold;">🚨 Auto-Reply Founder Message</button>
-      `;
-      textarea.parentElement.insertBefore(bar, textarea);
+    if (settings.emailNotifications) {
+      checkAndTriggerEmailNotification(commentText, refundRisk);
+    }
 
-      const btn = bar.querySelector('.orbit-generate-btn');
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        const urgentReply = `Hi ${authorName}, I am so sorry you are experiencing this. As the founder, I take this extremely seriously. Please email me directly at founder@orbit.com right now so I can personally investigate and resolve this for you immediately.`;
-        setTextareaValue(textarea, urgentReply);
-        btn.textContent = '✓ Urgent Reply Ready';
-        btn.style.background = '#4f46e5';
-        
-        // Track stats - risk was caught
-        incrementReplyStats(true);
-      });
-      updateOrbitDashboard();
-      return; 
+    triggerWebhookAlert(commentText, authorName, refundRisk, 'Comments & Reviews');
+
+    bar.innerHTML = `
+      <style>@keyframes pulseRed { 0% { opacity: 1; box-shadow: 0 0 0 0 rgba(220,38,38,0.7); } 50% { opacity: 0.8; box-shadow: 0 0 0 8px rgba(220,38,38,0); } 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(220,38,38,0); } }</style>
+      <span style="background:#4f46e5;color:white;padding:2px 8px;border-radius:4px;font-weight:bold;">ORBIT</span>
+      <span style="background:#dc2626;color:white;padding:2px 8px;border-radius:4px;font-weight:bold;animation: pulseRed 1.5s infinite;">⚠️ REFUND RISK</span>
+      <span style="color:#ef4444;flex:1;font-weight:bold;">URGENT: Score ${refundRisk}/100</span>
+      <button class="orbit-generate-btn" style="background:#dc2626;color:white;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:bold;">🚨 Auto-Reply Founder Message</button>
+    `;
+    textarea.parentElement.insertBefore(bar, textarea);
+
+    const btn = bar.querySelector('.orbit-generate-btn');
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const urgentReply = `Hi ${authorName}, I am so sorry you are experiencing this. As the founder, I take this extremely seriously. Please email me directly at founder@orbit.com right now so I can personally investigate and resolve this for you immediately.`;
+      setTextareaValue(textarea, urgentReply);
+      btn.textContent = '✓ Urgent Reply Ready';
+      btn.style.background = '#4f46e5';
+      incrementReplyStats(true);
+    });
+    updateOrbitDashboard();
+    return;
   }
 
-  // 🌐 Special UI for Non-English
   if (type === 'NON_ENGLISH') {
     bar.innerHTML = `
         <span style="background:#4f46e5;color:white;padding:2px 8px;border-radius:4px;font-weight:bold;">ORBIT</span>
@@ -496,10 +720,9 @@ function _buildOrbitBar(textarea, commentContainer, authorName, settings) {
       alert('🚀 PRO FEATURE: In the paid version, ORBIT uses advanced AI to automatically detect the language and reply fluently in French, Spanish, German, and 30+ other languages!');
     });
     updateOrbitDashboard();
-    return; // Stop here, do not attach normal generation logic
+    return;
   }
 
-  // Normal UI for English
   bar.innerHTML = `
     <span style="background:#4f46e5;color:white;padding:2px 8px;border-radius:4px;font-weight:bold;">ORBIT</span>
     <span style="background:${TYPE_COLORS[type] || '#6b7280'};color:white;padding:2px 8px;border-radius:4px;">${type}</span>
@@ -522,12 +745,10 @@ function _buildOrbitBar(textarea, commentContainer, authorName, settings) {
       btn.textContent = '✓ Reply Ready';
       btn.style.background = '#4f46e5';
       btn.disabled = false;
-      
-      // Remove any existing feedback buttons
+
       const existingFeedback = bar.querySelector('.orbit-feedback-btns');
       if (existingFeedback) existingFeedback.remove();
 
-      // Add feedback buttons
       const feedbackDiv = document.createElement('div');
       feedbackDiv.className = 'orbit-feedback-btns';
       feedbackDiv.style.cssText = 'display:flex;gap:4px;margin-left:8px;';
@@ -537,13 +758,11 @@ function _buildOrbitBar(textarea, commentContainer, authorName, settings) {
       `;
       bar.appendChild(feedbackDiv);
 
-      // Handle good feedback
       feedbackDiv.querySelector('.orbit-feedback-good').addEventListener('click', (ev) => {
         ev.stopPropagation();
         feedbackDiv.innerHTML = '<span style="color:#10b981;font-size:12px;">Thanks! ✓</span>';
       });
 
-      // Handle bad feedback
       feedbackDiv.querySelector('.orbit-feedback-bad').addEventListener('click', async (ev) => {
         ev.stopPropagation();
         const reasons = ['Wrong Tone', 'Hallucination', 'Missed Context', 'Inaccurate', 'Other'];
@@ -553,8 +772,7 @@ function _buildOrbitBar(textarea, commentContainer, authorName, settings) {
           feedbackDiv.innerHTML = '<span style="color:#f59e0b;font-size:12px;">Feedback saved! ✓</span>';
         }
       });
-      
-      // Track stats
+
       incrementReplyStats(false);
     } catch (err) {
       console.error('ORBIT: Error generating reply:', err);
@@ -562,18 +780,20 @@ function _buildOrbitBar(textarea, commentContainer, authorName, settings) {
       btn.disabled = false;
     }
   });
-  
+
   updateOrbitDashboard();
 }
 
 // ============================================================
-// SECTION 8: FLOATING ACTION DASHBOARD
+// SECTION 5: FLOATING DASHBOARD
 // ============================================================
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+let orbitDashboardDismissed = false;
 
 function initOrbitDashboard() {
   if (document.getElementById('orbit-dashboard')) return;
+  if (orbitDashboardDismissed) return;
 
   const panel = document.createElement('div');
   panel.id = 'orbit-dashboard';
@@ -610,37 +830,13 @@ function initOrbitDashboard() {
 
   document.body.appendChild(panel);
 
-  // Toggle button
   const toggleBtn = document.getElementById('orbit-toggle');
-  chrome.storage.local.get('orbitEnabled', (result) => {
-    const isEnabled = result.orbitEnabled !== false;
+
+  chrome.storage.local.get('orbitSettings', (result) => {
+    const settings = result.orbitSettings || {};
+    const isEnabled = settings.orbitAIEnabled !== false;
     updateToggleState(toggleBtn, isEnabled);
   });
-
-  toggleBtn.addEventListener('click', () => {
-    chrome.storage.local.get('orbitEnabled', (result) => {
-      const newState = result.orbitEnabled === false ? true : false;
-      chrome.storage.local.set({ orbitEnabled: newState });
-      updateToggleState(toggleBtn, newState);
-
-      if (newState) {
-        scanForTextareas();
-        showOrbitNotification('ORBIT enabled');
-      } else {
-        hideAllOrbitBars();
-        showOrbitNotification('ORBIT paused');
-      }
-    });
-  });
-
-  // Close button
-  document.getElementById('orbit-dash-close').addEventListener('click', () => {
-    panel.style.opacity = '0';
-    setTimeout(() => panel.remove(), 300);
-  });
-
-  // Auto-fill button
-  document.getElementById('orbit-dash-autofill').addEventListener('click', () => orbitBulkFill());
 }
 
 function updateToggleState(btn, enabled) {
@@ -672,9 +868,8 @@ function updateOrbitDashboard() {
   const panel = document.getElementById('orbit-dashboard');
   if (!panel) return;
 
-  // Detect Comments page using DOM content (SPA - URL doesn't change)
   const isCommentsPage = document.body.innerText.includes('Comments & Reviews') || document.querySelector('.comment-card') !== null;
-  
+
   if (!isCommentsPage) {
     const statsEl = document.getElementById('orbit-dash-stats');
     if (statsEl) {
@@ -694,11 +889,9 @@ function updateOrbitDashboard() {
   const allBars = document.querySelectorAll('.orbit-reply-assistant');
   const genBtns = document.querySelectorAll('.orbit-generate-btn:not(:disabled)');
 
-  // Count by type
   const typeCounts = {};
   allBars.forEach(bar => {
     const badges = bar.querySelectorAll('span');
-    // Get the second span which contains the type badge
     const badge = badges[1];
     if (!badge) return;
     const t = badge.textContent.trim();
@@ -708,7 +901,6 @@ function updateOrbitDashboard() {
   const total = allBars.length;
   const fillable = genBtns.length;
 
-  // Update stats line
   const statsEl = document.getElementById('orbit-dash-stats');
   if (statsEl) {
     statsEl.textContent = total === 0
@@ -716,22 +908,19 @@ function updateOrbitDashboard() {
       : `🎯 ${total} comment${total !== 1 ? 's' : ''} detected · ${fillable} ready to fill`;
   }
 
-  // Show autofill button on comments page
   const autofillBtn = document.getElementById('orbit-dash-autofill');
   if (autofillBtn) {
     autofillBtn.style.display = 'block';
   }
 
-  // Update breakdown badges
   const TYPE_COLORS = {
     NEGATIVE: '#ef4444', QUESTION: '#3b82f6', FEATURE: '#8b5cf6',
-    POSITIVE_FEATURE: '#f59e0b', POSITIVE: '#10b981', NEUTRAL: '#6b7280', 
+    POSITIVE_FEATURE: '#f59e0b', POSITIVE: '#10b981', NEUTRAL: '#6b7280',
     NON_ENGLISH: '#ec4899', CRITICAL: '#dc2626'
   };
   const breakdownEl = document.getElementById('orbit-dash-breakdown');
   if (breakdownEl) {
     breakdownEl.innerHTML = Object.entries(typeCounts).map(([type, count]) => {
-      // Map display text to type names for proper coloring
       let displayType = type;
       if (type.includes('REFUND RISK')) displayType = 'CRITICAL';
       if (type.includes('NON_ENGLISH')) displayType = 'NON_ENGLISH';
@@ -740,12 +929,9 @@ function updateOrbitDashboard() {
     }).join('');
   }
 
-  // Update button label
   const autoBtn = document.getElementById('orbit-dash-autofill');
   if (autoBtn) {
-    autoBtn.textContent = fillable > 0
-      ? `✨ Auto-Fill All ${fillable} Replies`
-      : '✨ Draft All Replies';
+    autoBtn.textContent = '✨ Draft All Replies';
     autoBtn.style.opacity = fillable > 0 ? '1' : '0.5';
   }
 }
@@ -763,14 +949,14 @@ async function orbitBulkFill() {
   for (let i = 0; i < commentCards.length; i++) {
     const card = commentCards[i];
 
-    // Check if it already has a filled textarea
     const existingTextarea = card.querySelector('textarea');
     if (existingTextarea && existingTextarea.value.trim() !== '') {
-      continue; // Already replied to
+      continue;
     }
 
-    // Extract text for classification
     let commentText = '';
+    let authorName = 'there';
+
     const contentEl = card.querySelector('.comment-content, .comment-body, p');
     if (contentEl) {
       commentText = contentEl.textContent.trim();
@@ -785,14 +971,22 @@ async function orbitBulkFill() {
       commentText = texts.sort((a, b) => b.length - a.length)[0] || '';
     }
 
-    // Filter Targets: qualify only English comments
-    const { type } = classifyComment(commentText);
-    if (type === 'NON_ENGLISH') {
-      continue; // Skip non-English, don't expand, don't fill
+    const nameEl = card.querySelector('h4, h3, .author-info, .user-name');
+    if (nameEl) {
+      const name = nameEl.textContent.trim();
+      if (name && name !== 'undefined' && name !== 'null') {
+        authorName = name.split(' ')[0];
+      }
     }
 
-    // Selective Expansion
-    if (!existingTextarea) {
+    const { type } = classifyComment(commentText);
+    if (type === 'NON_ENGLISH') {
+      continue;
+    }
+
+    let textarea = existingTextarea;
+
+    if (!textarea) {
       const btns = Array.from(card.querySelectorAll('button, .reply-btn, a'));
       const toggleBtn = btns.find(b => {
         const txt = b.textContent.toLowerCase().trim();
@@ -802,51 +996,43 @@ async function orbitBulkFill() {
       });
 
       if (toggleBtn) {
-        if (progressEl) progressEl.textContent = `👁️ Expanding targeted reply...`;
+        if (progressEl) progressEl.textContent = `👁️ Expanding reply ${i + 1}/${commentCards.length}...`;
         toggleBtn.click();
-        await sleep(250); // Wait for React to render and ORBIT Observer to inject
+        await sleep(300);
+        textarea = card.querySelector('textarea');
       }
     }
 
-    // Find the newly injected generate button (if it was just expanded, or if it was already open)
-    const genBtn = card.querySelector('.orbit-generate-btn');
-    if (genBtn && !genBtn.disabled) {
-      // One more safety check: is textarea actually empty?
-      const bar = genBtn.closest('.orbit-reply-assistant');
-      const textarea = bar ? bar.nextElementSibling : null;
-      if (textarea && textarea.value.trim() === '') {
-        if (progressEl) progressEl.textContent = `⚡ Filling reply ${processedCount + 1}...`;
-        
-        // Click and wait for async operation to complete
-        const clickPromise = new Promise((resolve) => {
-          const handler = () => {
-            genBtn.removeEventListener('click', handler);
-            resolve();
-          };
-          genBtn.addEventListener('click', handler);
-        });
-        genBtn.click();
-        
-        // Wait for button to be re-enabled (async operation complete)
-        await (async () => {
-          let waited = 0;
-          while (genBtn.disabled && waited < 5000) {
-            await sleep(50);
-            waited += 50;
-          }
-        })();
-        
-        processedCount++;
-        await sleep(200); // Stagger before moving to next targeted comment
+    if (!textarea) continue;
+
+    if (progressEl) progressEl.textContent = `✍️ Drafting reply ${processedCount + 1}...`;
+
+    try {
+      const replyText = await generateReply(type, authorName, commentText);
+
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+      if (nativeSetter) {
+        nativeSetter.call(textarea, replyText);
+      } else {
+        textarea.value = replyText;
       }
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      textarea.dispatchEvent(new Event('change', { bubbles: true }));
+
+      await incrementReplyStats(false);
+      processedCount++;
+    } catch (err) {
+      console.error('ORBIT: Error generating reply:', err);
     }
+
+    await sleep(100);
   }
 
   if (progressEl) {
     if (processedCount === 0) {
       progressEl.textContent = '⚠️ No valid empty reply fields found.';
     } else {
-      progressEl.textContent = `✅ ${processedCount} repl${processedCount !== 1 ? 'ies' : 'y'} filled successfully!`;
+      progressEl.textContent = `✅ ${processedCount} repl${processedCount !== 1 ? 'ies' : 'y'} drafted successfully!`;
     }
     setTimeout(() => { progressEl.style.display = 'none'; }, 3000);
   }
@@ -854,40 +1040,43 @@ async function orbitBulkFill() {
   if (autoBtn) {
     autoBtn.disabled = false;
     autoBtn.textContent = '✨ Draft All Replies';
-    updateOrbitDashboard(); // Ensure dashboard reflects newly filled state
+    updateOrbitDashboard();
   }
 }
 
 // ============================================================
-// SECTION 9: SCANNER & OBSERVER
+// SECTION 6: SCANNER & OBSERVER
 // ============================================================
 
 function scanAndInject() {
+  if (!isStorageReady) return;
+
   getSettings().then(settings => {
     if (!settings.orbitAIEnabled) return;
-    
+
     document.querySelectorAll('textarea').forEach(textarea => {
       if (!injectedTextareas.has(textarea)) injectOrbitBar(textarea);
     });
-    updateOrbitDashboard(); // keep dashboard count live after every scan
+    updateOrbitDashboard();
   });
 }
 
 let scanTimeout;
 orbitObserver = new MutationObserver(mutations => {
+  if (!isStorageReady) return;
+
   getSettings().then(settings => {
     if (!settings.orbitAIEnabled) {
       orbitObserver.disconnect();
       return;
     }
-    
-    // Restart observer if it was disconnected
+
     if (!orbitObserver.takeRecords().length && document.body) {
       try {
         orbitObserver.observe(document.body, { childList: true, subtree: true, attributes: false });
       } catch (e) {}
     }
-    
+
     const hasStructuralChange = mutations.some(m => m.type === 'childList' && m.addedNodes.length > 0);
     if (!hasStructuralChange) return;
 
@@ -902,302 +1091,454 @@ orbitObserver = new MutationObserver(mutations => {
   });
 });
 
+let hasScannedThisCycle = false;
+
 function scanForTextareas() {
+  if (!isStorageReady) return;
+  if (hasScannedThisCycle) return;
+  hasScannedThisCycle = true;
+
+  setTimeout(() => { hasScannedThisCycle = false; }, 5000);
+
   getSettings().then(settings => {
     if (!settings.orbitAIEnabled) return;
-    
+
     document.querySelectorAll('textarea').forEach(textarea => {
       if (!injectedTextareas.has(textarea)) injectOrbitBar(textarea);
     });
     updateOrbitDashboard();
+    saveBulkScanStats();
   });
 }
 
-function removeAllOrbitUI() {
-  document.querySelectorAll('.orbit-reply-assistant, #orbit-dashboard').forEach(el => el.remove());
-  injectedTextareas.clear();
-  if (orbitObserver) {
-    orbitObserver.disconnect();
-  }
+function saveBulkScanStats() {
+  if (!isStorageReady) return;
+
+  const totalComments = document.querySelectorAll('.orbit-reply-assistant').length;
+
+  if (totalComments === 0) return;
+
+  chrome.storage.local.get('orbitStats', (result) => {
+    const stats = result.orbitStats || {
+      repliesGenerated: 0,
+      timeSavedMinutes: 0,
+      risksCaught: 0,
+      commentsAnalyzed: 0
+    };
+
+    let riskCount = 0;
+    document.querySelectorAll('.orbit-reply-assistant').forEach(bar => {
+      const badges = bar.querySelectorAll('span');
+      badges.forEach(badge => {
+        if (badge.textContent && badge.textContent.includes('REFUND RISK')) {
+          riskCount++;
+        }
+      });
+    });
+
+    stats.commentsAnalyzed = (stats.commentsAnalyzed || 0) + totalComments;
+    stats.risksCaught = (stats.risksCaught || 0) + riskCount;
+
+    chrome.storage.local.set({ orbitStats: stats }, () => {
+      console.log('ORBIT Scan Stats Saved:', stats);
+      updateOverviewStatsIfVisible();
+    });
+  });
 }
 
-async function initOrbitOnLoad() {
-  const settings = await getSettings();
+ function renderMasterFilter() {
+    if (!isStorageReady) return;
+    if (document.getElementById('orbit-master-filter-container')) return;
+
+    // بحث ذكي ومضمون عن مكان العدادات للصق الفلتر فوقها
+    const repliesEl = document.querySelector('[id*="replies"]');
+    if (!repliesEl) return;
+    const statsGrid = repliesEl.closest('div[class*="grid"], div[class*="flex"]') || repliesEl.parentElement.parentElement;
+    if (!statsGrid || !statsGrid.parentNode) return;
+
+    const container = document.createElement('div');
+    container.id = 'orbit-master-filter-container';
+    container.style.cssText = 'margin-bottom: 24px; padding: 16px 24px; background: #1e1e24; border-radius: 12px; border: 1px solid #4f46e5; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; box-sizing: border-box;';
+
+    container.innerHTML = `
+        <div style="display:flex; align-items:center; gap: 12px;">
+            <span style="font-size:24px;">📊</span>
+            <div>
+                <h3 style="color:#fff; margin:0 0 4px 0; font-size:16px; font-weight:bold;">Dashboard Overview</h3>
+                <p style="color:#9ca3af; margin:0; font-size:12px;">Select a product to filter your FAQs.</p>
+            </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+            <label style="color:#9ca3af; font-size:14px; font-weight:600;">Active Product:</label>
+            <select id="orbit-master-filter" style="background:#2d2d36; color:#10b981; border:2px solid #374151; border-radius:8px; padding:10px 16px; font-size:14px; font-weight:bold; outline:none; cursor:pointer; min-width: 200px;">
+                <option value="Global">🌍 All Products (Global)</option>
+            </select>
+        </div>
+    `;
+
+    statsGrid.parentNode.insertBefore(container, statsGrid);
+
+    chrome.storage.local.get(['orbitProducts', 'orbitActiveFilter'], (res) => {
+        const select = document.getElementById('orbit-master-filter');
+        (res.orbitProducts || []).forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.name;
+            opt.textContent = "📦 " + p.name;
+            select.appendChild(opt);
+        });
+        
+        if (res.orbitActiveFilter) select.value = res.orbitActiveFilter;
+
+        select.addEventListener('change', (e) => {
+            chrome.storage.local.set({ orbitActiveFilter: e.target.value }, () => {
+                document.getElementById('orbit-dynamic-faq')?.remove();
+                if (typeof renderAutoFAQ === 'function') renderAutoFAQ();
+                renderStatsUI();
+            });
+        });
+    });
+}
+
+// ============================================================
+// SECTION 8: UNIFIED SPA ROUTER
+// ============================================================
+
+let routerInterval = null;
+
+function renderStatsUI() {
+  if (!isStorageReady) return;
+  try {
+    chrome.storage.local.get(['orbitStats', 'orbitActiveFilter'], (result) => {
+      const allStats = result.orbitStats || {};
+      const activeFilter = result.orbitActiveFilter || 'Global';
+      
+      let displayStats;
+
+      if (activeFilter === 'Global') {
+        displayStats = {
+          repliesGenerated: allStats.repliesGenerated || 0,
+          timeSavedMinutes: allStats.timeSavedMinutes || 0,
+          risksCaught: allStats.risksCaught || 0,
+          commentsAnalyzed: allStats.commentsAnalyzed || 0
+        };
+      } else {
+        displayStats = (allStats.byProduct && allStats.byProduct[activeFilter]) || {
+          repliesGenerated: 0,
+          timeSavedMinutes: 0,
+          risksCaught: 0,
+          commentsAnalyzed: 0
+        };
+      }
+
+      const repliesEl = document.getElementById('orbit-replies-generated');
+      const timeEl = document.getElementById('orbit-time-saved');
+      const risksEl = document.getElementById('orbit-risks-caught');
+      const commentsEl = document.getElementById('orbit-comments-analyzed');
+
+      if (repliesEl) repliesEl.innerText = displayStats.repliesGenerated;
+      if (timeEl) timeEl.innerText = formatTimeSaved(displayStats.timeSavedMinutes);
+      if (risksEl) risksEl.innerText = displayStats.risksCaught;
+      if (commentsEl) commentsEl.innerText = displayStats.commentsAnalyzed;
+    });
+  } catch (e) { console.error("Stats Render Error:", e); }
+}
+
+function renderAutoFAQ() {
+  if (!isStorageReady) return;
+  if (document.getElementById('orbit-dynamic-faq')) return;
   
-  if (settings.orbitAIEnabled) {
-    initOrbitDashboard();
-    setTimeout(scanForTextareas, 1000);
+  try {
+    const statsEl = document.querySelector('[id*="replies"], [id*="time-saved"], [id*="risks"]');
+    if (!statsEl) return;
     
-    if (orbitObserver) {
-      orbitObserver.observe(document.body, { childList: true, subtree: true, attributes: false });
-    }
-  }
-  
-  // Handle SPA navigation - detect page changes
-  handlePageNavigation();
+    const container = statsEl.closest('.bg-gray-50, .stats-container, .overview-container, .main-content') || statsEl.parentElement?.parentElement || statsEl.parentElement;
+    if (!container) return;
+
+    chrome.storage.local.get(['orbitFAQs', 'orbitActiveFilter'], (result) => {
+      const faqs = result.orbitFAQs || [];
+      const activeFilter = result.orbitActiveFilter || 'Global';
+      
+      const faqDiv = document.createElement('div');
+      faqDiv.id = 'orbit-dynamic-faq';
+      faqDiv.style.cssText = 'margin-top: 20px; padding: 16px; background: #1e1e24; border-radius: 8px; border: 1px solid #333; font-family: sans-serif;';
+      
+      const filteredFaqs = activeFilter === 'Global' ? faqs : faqs.filter(faq => faq.product === activeFilter);
+      
+      faqDiv.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h3 style="color:#fff;margin:0;font-size:16px;">📚 Auto-FAQ: <span style="color:#10b981;">${escapeHtml(activeFilter)}</span></h3>
+          <button id="orbit-clear-faqs" style="background:transparent;border:1px solid #ef4444;color:#ef4444;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">🗑️ Clear</button>
+        </div>
+        <div id="orbit-faq-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      `;
+      
+      container.appendChild(faqDiv);
+      
+      const listContainer = document.getElementById('orbit-faq-list');
+      
+      if (filteredFaqs.length === 0) {
+        listContainer.innerHTML = '<p style="color:#6b7280;font-size:13px;text-align:center;padding:10px 0;">No questions for ' + escapeHtml(activeFilter) + '.</p>';
+      } else {
+        listContainer.innerHTML = filteredFaqs.map(faq => `
+          <div style="background:#2d2d36;padding:12px;border-radius:6px;border:1px solid #444;display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <p style="color:#e2e8f0;font-size:13px;margin:0 0 6px 0;line-height:1.4;">${escapeHtml(faq.text)}</p>
+              <span style="color:#888;font-size:11px;">— ${escapeHtml(faq.author || 'Customer')}</span>
+            </div>
+            <span style="background:#4f46e5;color:#fff;font-size:10px;padding:3px 8px;border-radius:12px;white-space:nowrap;margin-left:10px;font-weight:bold;">${escapeHtml(faq.product || 'Global')}</span>
+          </div>
+        `).join('');
+      }
+      
+      document.getElementById('orbit-clear-faqs')?.addEventListener('click', () => {
+        chrome.storage.local.set({ orbitFAQs: [] }, () => {
+          listContainer.innerHTML = '<p style="color:#6b7280;font-size:13px;text-align:center;padding:10px 0;">Memory cleared.</p>';
+        });
+      });
+    });
+  } catch (e) { /* container not found */ }
 }
 
-// ============================================================
-// SECTION 10: SIMPLE PAGE VISIBILITY CHECK
-// ============================================================
-
-function handlePageNavigation() {
-  let lastUrl = window.location.href;
+function renderCommandCenter() {
+  if (!isStorageReady) return;
+  if (document.getElementById('orbit-command-center')) return;
   
-  setInterval(() => {
-    if (window.location.href !== lastUrl) {
-      lastUrl = window.location.href;
-      injectedTextareas.clear();
-      if (orbitObserver) {
-        orbitObserver.disconnect();
-        orbitObserver = new MutationObserver(mutations => {
-          const hasStructuralChange = mutations.some(m => m.type === 'childList' && m.addedNodes.length > 0);
-          if (!hasStructuralChange) return;
-          
-          clearTimeout(scanTimeout);
-          scanTimeout = setTimeout(scanAndInject, 500);
+  try {
+    let targetEl = null;
+    const allElements = document.querySelectorAll('h1, h2, h3, h4, div, section');
+    
+    for (const el of allElements) {
+      const text = el.textContent || '';
+      if (text.includes('Email Notifications') || text.includes('Configure your dashboard') || text.includes('Analytics Tracking')) {
+        targetEl = el;
+        break;
+      }
+    }
+    
+    if (!targetEl) {
+      targetEl = document.querySelector('#settings, .settings-page, .main-content, [role="main"]');
+    }
+    
+    if (!targetEl) {
+      targetEl = document.body;
+    }
+    
+    const cmdDiv = document.createElement('div');
+    cmdDiv.id = 'orbit-command-center';
+    cmdDiv.style.cssText = 'margin: 20px 0; padding: 24px; background: #1e1e24; border-radius: 12px; border: 1px solid #4f46e5; max-width: 700px; font-family: sans-serif;';
+    
+    cmdDiv.innerHTML = `
+      <h3 style="color:#00d4ff;margin:0 0 12px 0;font-size:18px;">🎯 Command Center - My Products</h3>
+      <p style="color:#9ca3af;margin:0 0 16px 0;font-size:13px;">Add products. Click "Open" to launch their comments page where ORBIT activates.</p>
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <input type="text" id="orbit-prod-name" placeholder="Product Name" style="flex:1;padding:12px;border-radius:6px;border:1px solid #444;background:#2d2d36;color:#fff;font-size:14px;box-sizing:border-box;">
+        <input type="url" id="orbit-prod-url" placeholder="Comments URL" style="flex:2;padding:12px;border-radius:6px;border:1px solid #444;background:#2d2d36;color:#fff;font-size:14px;box-sizing:border-box;">
+        <button id="orbit-add-prod" style="background:#10b981;color:#fff;border:none;padding:12px 20px;border-radius:6px;cursor:pointer;font-weight:600;">➕ Add</button>
+      </div>
+      <div id="orbit-prod-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    `;
+    
+    targetEl.appendChild(cmdDiv);
+    
+    const renderList = (prods) => {
+      const list = document.getElementById('orbit-prod-list');
+      if (!list) return;
+      
+      if (!prods || prods.length === 0) {
+        list.innerHTML = '<p style="color:#6b7280;font-size:13px;">No products yet.</p>';
+        return;
+      }
+      
+      list.innerHTML = prods.map(p => `
+        <div style="display:flex;justify-content:space-between;align-items:center;background:#2d2d36;padding:14px;border-radius:8px;border:1px solid #444;">
+          <div>
+            <strong style="color:#fff;font-size:14px;">${escapeHtml(p.name)}</strong>
+            <div style="color:#888;font-size:12px;margin-top:4px;">${escapeHtml(p.url)}</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <a href="${escapeHtml(p.url)}" target="_blank" style="background:#3b82f6;color:#fff;text-decoration:none;padding:8px 14px;border-radius:6px;font-size:12px;">🔗 Open</a>
+            <button class="orbit-del-prod" data-id="${p.id}" style="background:#ef4444;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px;">🗑️</button>
+          </div>
+        </div>
+      `).join('');
+      
+      list.querySelectorAll('.orbit-del-prod').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = parseInt(btn.dataset.id);
+          chrome.storage.local.get(['orbitProducts'], res => {
+            const updated = (res.orbitProducts || []).filter(p => p.id !== id);
+            chrome.storage.local.set({ orbitProducts: updated }, () => renderList(updated));
+          });
+        });
+      });
+    };
+    
+    chrome.storage.local.get(['orbitProducts'], res => renderList(res.orbitProducts || []));
+    
+    document.getElementById('orbit-add-prod').addEventListener('click', () => {
+      const name = document.getElementById('orbit-prod-name').value.trim();
+      const url = document.getElementById('orbit-prod-url').value.trim();
+      if (name && url) {
+        chrome.storage.local.get(['orbitProducts'], res => {
+          const prods = res.orbitProducts || [];
+          prods.push({ id: Date.now(), name, url });
+          chrome.storage.local.set({ orbitProducts: prods }, () => {
+            renderList(prods);
+            document.getElementById('orbit-prod-name').value = '';
+            document.getElementById('orbit-prod-url').value = '';
+          });
         });
       }
+    });
+  } catch (e) { /* render failed */ }
+}
+
+// SINGLE UNIFIED SPA ROUTER
+routerInterval = setInterval(() => {
+  try {
+    if (!isStorageReady) return;
+    
+    if (!chrome.runtime?.id) {
+      clearInterval(routerInterval);
+      return;
     }
+
+    const bodyText = document.body.innerText || "";
     
-    const isCommentsPage = document.body.innerText.includes('Comments & Reviews');
-    const panel = document.getElementById('orbit-dashboard');
-    
-    if (panel) {
-      if (isCommentsPage) {
-        panel.style.display = 'flex';
+    const isSettings = bodyText.includes('Configure your dashboard preferences') || bodyText.includes('Email Notifications');
+    const isOverview = (bodyText.includes('REPLIES GENERATED') || bodyText.includes('Dashboard Overview')) && !isSettings;
+
+    if (isSettings) {
+      document.getElementById('orbit-dynamic-faq')?.remove();
+      if (typeof renderCommandCenter === 'function') renderCommandCenter();
+    } 
+    else if (isOverview) {
+      document.getElementById('orbit-command-center')?.remove();
+      if (typeof renderMasterFilter === 'function') renderMasterFilter();
+      if (typeof renderStatsUI === 'function') renderStatsUI();
+      if (typeof renderAutoFAQ === 'function') renderAutoFAQ();
+    }
+    else {
+      document.getElementById('orbit-command-center')?.remove();
+      document.getElementById('orbit-dynamic-faq')?.remove();
+    }
+  } catch (e) {
+    if (e.message?.includes('Extension context invalidated')) {
+      clearInterval(routerInterval);
+    }
+  }
+}, 500);
+
+console.log('ORBIT: Unified SPA Router started');
+
+// Re-scan Comments on sidebar click
+document.addEventListener('click', (e) => {
+  const target = e.target.closest('a, button, [role="button"]');
+  if (!target) return;
+  
+  const text = (target.textContent || '').toLowerCase();
+  const href = target.href || '';
+  
+  if (text.includes('comment') || href.includes('comment')) {
+    setTimeout(() => {
+      if (isStorageReady) {
         scanForTextareas();
-        updateOrbitDashboard();
-      } else {
-        panel.style.display = 'none';
+        initOrbitDashboard();
       }
-    }
-  }, 1000);
-}
+    }, 1000);
+  }
+});
 
-function startPageVisibilityChecker() {
-  let lastUrl = location.href;
-  
-  setInterval(() => {
-    const url = location.href;
-    const isCommentsPage = document.body.innerText.includes('Comments & Reviews') || document.querySelector('.comment-card') !== null;
-    const isOverviewPage = document.body.innerText.includes('Dashboard Overview') || document.getElementById('orbit-replies-generated') !== null;
-    const isSettingsPage = document.body.innerText.includes('Configure your dashboard preferences');
-    
+// ============================================================
+// SECTION 9: GLOBAL EVENT HANDLERS
+// ============================================================
+
+document.addEventListener('click', async (e) => {
+  if (e.target.id === 'orbit-dash-close') {
+    orbitDashboardDismissed = true;
     const panel = document.getElementById('orbit-dashboard');
-    
-    if (isCommentsPage) {
-      if (panel && panel.style.display === 'none') {
-        panel.style.display = 'flex';
+    if (panel) {
+      panel.style.opacity = '0';
+      setTimeout(() => panel.remove(), 300);
+    }
+  } else if (e.target.id === 'orbit-toggle') {
+    if (!isStorageReady) return;
+    const toggleBtn = e.target;
+    chrome.storage.local.get('orbitSettings', (result) => {
+      const settings = result.orbitSettings || {};
+      const newState = !settings.orbitAIEnabled;
+      const newSettings = { ...settings, orbitAIEnabled: newState };
+      chrome.storage.local.set({ orbitSettings: newSettings });
+      cachedSettings.orbitAIEnabled = newState;
+      updateToggleState(toggleBtn, newState);
+      if (newState) {
+        scanForTextareas();
+        showOrbitNotification('ORBIT enabled');
+      } else {
+        hideAllOrbitBars();
+        showOrbitNotification('ORBIT paused');
       }
-      scanForTextareas();
-      updateOrbitDashboard();
-    } else if (isOverviewPage) {
-      if (panel) panel.style.display = 'none';
-      updateOverviewStats();
-    } else if (isSettingsPage) {
-      if (panel) panel.style.display = 'none';
-      handleSettingsPage();
-    } else {
-      if (panel) panel.style.display = 'none';
-    }
-    
-    lastUrl = url;
-  }, 1000);
-}
-
-async function updateOverviewStats() {
-  const stats = await getStats();
-  
-  // Find the stat cards in the Overview page and update by ID
-  const repliesEl = document.getElementById('orbit-replies-generated');
-  const timeEl = document.getElementById('orbit-time-saved');
-  const risksEl = document.getElementById('orbit-risks-caught');
-  const commentsEl = document.getElementById('orbit-comments-analyzed');
-  
-  if (repliesEl) repliesEl.textContent = stats.repliesGenerated;
-  if (timeEl) timeEl.textContent = formatTimeSaved(stats.timeSavedMinutes);
-  if (risksEl) risksEl.textContent = stats.risksCaught;
-  if (commentsEl) commentsEl.textContent = stats.commentsAnalyzed;
-}
-
-function formatTimeSaved(minutes) {
-  if (minutes < 60) {
-    return `${minutes}m`;
+    });
+  } else if (e.target.id === 'orbit-dash-autofill') {
+    orbitBulkFill();
   }
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-}
+});
 
 // ============================================================
-// SECTION 11: SETTINGS PAGE HANDLER
+// SECTION 10: INITIALIZATION
 // ============================================================
-
-function handleSettingsPage() {
-  // Detect Settings page using DOM content (SPA - URL doesn't change)
-  const isSettingsPage = document.body.innerText.includes('Configure your dashboard preferences');
-  if (!isSettingsPage) return;
-  
-  const toggleContainer = document.querySelector('div:has(span:contains("ORBIT AI Assistant"))');
-  if (!toggleContainer) return;
-  
-  let toggleBtn = toggleContainer.querySelector('#orbit-settings-toggle');
-  if (toggleBtn) return;
-  
-  toggleBtn = document.createElement('button');
-  toggleBtn.id = 'orbit-settings-toggle';
-  toggleBtn.style.cssText = `
-    background:#2d2d4e;border:1px solid #4f46e5;border-radius:12px;
-    color:#10b981;cursor:pointer;font-size:12px;padding:4px 10px;margin-left:8px;
-  `;
-  
-  const headerSpan = toggleContainer.querySelector('span');
-  if (headerSpan) {
-    headerSpan.parentElement.insertBefore(toggleBtn, headerSpan.nextSibling);
-  }
-  
-  getSettings().then(settings => {
-    updateToggleBtnState(toggleBtn, settings.orbitAIEnabled);
-  });
-  
-  toggleBtn.addEventListener('click', async () => {
-    const settings = await getSettings();
-    const newState = !settings.orbitAIEnabled;
-    
-    const newSettings = { ...settings, orbitAIEnabled: newState };
-    chrome.storage.local.set({ orbitSettings: newSettings });
-    
-    updateToggleBtnState(toggleBtn, newState);
-    
-    if (newState) {
-      initOrbitDashboard();
-      setTimeout(scanForTextareas, 500);
-      showOrbitNotification('ORBIT enabled');
-    } else {
-      removeAllOrbitUI();
-      showOrbitNotification('ORBIT Paused');
-    }
-  });
-
-  // Team Alerts Section - Webhook Configuration
-  const settingsContainer = document.querySelector('div:has(> span:contains("Configure your dashboard"))');
-  if (!settingsContainer) return;
-
-  if (document.getElementById('orbit-webhook-section')) return;
-
-  const webhookSection = document.createElement('div');
-  webhookSection.id = 'orbit-webhook-section';
-  webhookSection.style.cssText = `
-    background: #1a1a2e; border: 1px solid #2d2d4e; border-radius: 8px;
-    padding: 16px; margin-top: 16px; font-family: sans-serif;
-  `;
-
-  webhookSection.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <span style="color:#00d4ff;font-weight:600;font-size:14px;">Team Alerts</span>
-    </div>
-    <div style="margin-bottom:12px;">
-      <label style="display:block;color:#9ca3af;font-size:12px;margin-bottom:6px;">Slack/Discord Webhook URL</label>
-      <input type="url" id="orbit-webhook-url" placeholder="https://hooks.slack.com/services/..." 
-        style="width:100%;padding:8px 12px;border:1px solid #2d2d4e;border-radius:6px;
-        background:#0d0d1a;color:#e2e8f0;font-size:13px;outline:none;box-sizing:border-box;">
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-      <span style="color:#9ca3af;font-size:12px;">Enable Webhook Alerts</span>
-      <button id="orbit-webhook-toggle" style="
-        background:#2d2d4e;border:1px solid #4f46e5;border-radius:12px;
-        color:#ef4444;cursor:pointer;font-size:12px;padding:4px 10px;
-      ">OFF</button>
-    </div>
-    <div id="orbit-webhook-status" style="margin-top:8px;font-size:11px;color:#6b7280;"></div>
-  `;
-
-  settingsContainer.appendChild(webhookSection);
-
-  const webhookUrlInput = document.getElementById('orbit-webhook-url');
-  const webhookToggleBtn = document.getElementById('orbit-webhook-toggle');
-  const webhookStatus = document.getElementById('orbit-webhook-status');
-
-  getSettings().then(settings => {
-    if (webhookUrlInput) {
-      webhookUrlInput.value = settings.webhookUrl || '';
-    }
-    updateWebhookToggleState(webhookToggleBtn, settings.webhookEnabled);
-    updateWebhookStatus(webhookStatus, settings.webhookEnabled, settings.webhookUrl);
-  });
-
-  webhookUrlInput.addEventListener('input', async () => {
-    const settings = await getSettings();
-    const newSettings = { ...settings, webhookUrl: webhookUrlInput.value };
-    chrome.storage.local.set({ orbitSettings: newSettings });
-    cachedSettings.webhookUrl = webhookUrlInput.value;
-    updateWebhookStatus(webhookStatus, settings.webhookEnabled, webhookUrlInput.value);
-  });
-
-  webhookToggleBtn.addEventListener('click', async () => {
-    const settings = await getSettings();
-    const newState = !settings.webhookEnabled;
-    
-    const newSettings = { ...settings, webhookEnabled: newState };
-    chrome.storage.local.set({ orbitSettings: newSettings });
-    cachedSettings.webhookEnabled = newState;
-    
-    updateWebhookToggleState(webhookToggleBtn, newState);
-    updateWebhookStatus(webhookStatus, newState, settings.webhookUrl);
-    
-    if (newState) {
-      showOrbitNotification('Webhook alerts enabled');
-    } else {
-      showOrbitNotification('Webhook alerts disabled');
-    }
-  });
-}
-
-function updateWebhookToggleState(btn, enabled) {
-  btn.textContent = enabled ? 'ON' : 'OFF';
-  btn.style.color = enabled ? '#10b981' : '#ef4444';
-  btn.style.borderColor = enabled ? '#4f46e5' : '#ef4444';
-}
-
-function updateWebhookStatus(statusEl, enabled, url) {
-  if (!statusEl) return;
-  if (!url) {
-    statusEl.textContent = 'Enter a webhook URL to enable team alerts';
-    statusEl.style.color = '#f59e0b';
-  } else if (enabled) {
-    statusEl.textContent = 'Active - Alerts will be sent to Slack/Discord';
-    statusEl.style.color = '#10b981';
-  } else {
-    statusEl.textContent = 'Webhook configured - Toggle ON to enable alerts';
-    statusEl.style.color = '#6b7280';
-  }
-}
-
-function updateToggleBtnState(btn, enabled) {
-  btn.textContent = enabled ? 'ON' : 'OFF';
-  btn.style.color = enabled ? '#10b981' : '#ef4444';
-  btn.style.borderColor = enabled ? '#4f46e5' : '#ef4444';
-}
 
 async function initExtension() {
+  console.log('ORBIT: Starting initialization...');
+
   const settings = await getSettings();
-  
+  cachedSettings = { ...cachedSettings, ...settings };
+
+  chrome.storage.local.get('orbitSettings', (result) => {
+    if (result.orbitSettings) {
+      cachedSettings = result.orbitSettings;
+    }
+  });
+
   if (settings.orbitAIEnabled) {
     initOrbitDashboard();
     setTimeout(scanForTextareas, 1000);
+
+    if (orbitObserver && document.body) {
+      try {
+        orbitObserver.observe(document.body, { childList: true, subtree: true, attributes: false });
+      } catch (e) {
+        console.warn('ORBIT: Failed to start observer', e);
+      }
+    }
   }
-  
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', handleSettingsPage);
-  } else {
-    handleSettingsPage();
-  }
-  
-  // Start simple page visibility checker
-  startPageVisibilityChecker();
+
+  setupStatsStorageListener();
+
+  console.log('ORBIT V6: Protection & Intelligence Active');
 }
 
-initExtension();
+function setupStatsStorageListener() {
+  if (!isStorageReady) return;
 
-console.log('✅ ORBIT V5 - Protection & Intelligence Active');
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.orbitStats) {
+      const newStats = changes.orbitStats.newValue;
+      if (!newStats) return;
+
+      const repliesEl = document.getElementById('orbit-replies-generated');
+      const timeEl = document.getElementById('orbit-time-saved');
+      const risksEl = document.getElementById('orbit-risks-caught');
+      const commentsEl = document.getElementById('orbit-comments-analyzed');
+
+      if (repliesEl) repliesEl.innerText = newStats.repliesGenerated || 0;
+      if (timeEl) timeEl.innerText = formatTimeSaved(newStats.timeSavedMinutes || 0);
+      if (risksEl) risksEl.innerText = newStats.risksCaught || 0;
+      if (commentsEl) commentsEl.innerText = newStats.commentsAnalyzed || 0;
+    }
+  });
+
+  console.log('ORBIT: Stats storage listener registered');
+}
+
+console.log('✅ ORBIT V6 - Safe Initialization Complete');
