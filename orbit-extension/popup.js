@@ -96,8 +96,6 @@ async function loadSettings() {
     document.getElementById('webhook-url').value = s.webhookUrl || '';
     document.getElementById('product-name').value = s.productName || '';
     document.getElementById('product-desc').value = s.productDescription || '';
-    const apiKeyInput = document.getElementById('ai-api-key');
-    if (apiKeyInput) apiKeyInput.value = s.aiApiKey || '';
 
     // Show/hide webhook config
     toggleWebhookConfig(!!s.webhookEnabled);
@@ -124,7 +122,6 @@ async function saveSettings() {
     webhookUrl: document.getElementById('webhook-url').value.trim(),
     productName: document.getElementById('product-name').value.trim(),
     productDescription: document.getElementById('product-desc').value.trim(),
-    aiApiKey: (document.getElementById('ai-api-key')?.value || '').trim(),
     analyticsTracking: true,
     emailNotifications: false
   };
@@ -257,22 +254,6 @@ function setupListeners() {
       a.download = 'orbit-data-export.json';
       a.click();
       URL.revokeObjectURL(url);
-    });
-  }
-
-  // Open Panel (BUG-E fix)
-  const openPanelBtn = document.getElementById('btn-open-panel');
-  if (openPanelBtn) {
-    openPanelBtn.addEventListener('click', async () => {
-      try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab?.id) {
-          await chrome.tabs.sendMessage(tab.id, { action: 'openOrbitPanel' });
-          window.close();
-        }
-      } catch (e) {
-        console.error('ORBIT: Failed to open panel', e);
-      }
     });
   }
 }

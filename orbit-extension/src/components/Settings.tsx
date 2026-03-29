@@ -97,22 +97,13 @@ export function Settings() {
   
   async function testApiKey(provider: AIProvider, key: string): Promise<boolean> {
     try {
-      const config = AIRouter.getProviderConfig(provider);
-      
-      // Make a simple test request
-      const testResponse = await fetch(config.endpoint, {
-        method: 'POST',
-        headers: provider === 'claude' 
-          ? { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
-          : { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: provider === 'openai' ? 'gpt-3.5-turbo' : 'gpt-4',
-          messages: [{ role: 'user', content: 'Test' }],
-          max_tokens: 5
-        })
+      const result = await chrome.runtime.sendMessage({
+        action: 'testApiKey',
+        provider,
+        key
       });
-      
-      return testResponse.ok;
+
+      return !!result?.success;
     } catch {
       return false;
     }

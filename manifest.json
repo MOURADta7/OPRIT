@@ -18,6 +18,10 @@
     "https://*.shopify.com/*",
     "https://*.myshopify.com/*",
     "http://localhost:*/*",
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.groq.com/*",
     "*://hooks.slack.com/*",
     "*://*.webhook.site/*",
     "*://*.discord.com/*"
@@ -33,9 +37,12 @@
         "https://gumroad.com/*",
         "https://*.gumroad.com/*",
         "https://app.lemonsqueezy.com/*",
+        "https://*.lemonsqueezy.com/*",
+        "https://*.shopify.com/*",
+        "https://*.myshopify.com/*",
         "http://localhost:*/*"
       ],
-      "js": ["content.js"],
+      "js": ["library.js", "content.js"],
       "css": ["styles.css"],
       "run_at": "document_end"
     }
