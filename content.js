@@ -580,6 +580,29 @@ function renderLayer0(body) {
     ? urgent.length + ' customer' + (urgent.length > 1 ? 's may refund' : ' may refund')
     : pending.length + ' comment' + (pending.length > 1 ? 's are waiting for a reply' : ' is waiting for a reply');
 
+  body.innerHTML = '<div class="op-status-shell '+(urgent.length > 0 ? 'alert' : 'calm')+'"><div class="op-status-kicker">'+(urgent.length > 0 ? 'Action Required' : 'ORBIT')+'</div><h2 class="op-status-title">'+statusTitle+'</h2><p class="op-status-copy">'+statusCopy+'</p></div><div class="op-action-shell"><div class="op-section-label">Current Action</div><div class="op-action-card '+(focus.risk >= 50 ? 'risk' : '')+'" id="op-focus-card"><div class="op-action-top"><div><div class="op-action-author">'+esc(focus.author)+'</div><div class="op-action-meta">'+(focus.type === 'NEGATIVE' ? 'Potential refund risk' : focus.type.replace('_',' '))+' • Score '+focus.risk+'/100</div></div><span class="op-risk-chip '+(focus.risk >= 50 ? 'alert' : 'safe')+'">'+riskLabel+'</span></div><p class="op-action-quote">"'+esc(focus.text.substring(0, 180))+(focus.text.length > 180 ? '...' : '')+'"</p><div class="op-action-row"><div><div style="font-size:12px;color:rgba(255,255,255,.86);font-weight:600;margin-bottom:4px">Reply ready</div><div class="op-action-note">'+(focus.risk >= 50 ? 'This is the one comment to fix first.' : 'This comment is waiting for your response.')+'</div></div><button class="op-fix-btn" id="op-fix-now">Fix This Now</button></div>'+(queue.length ? '<div class="op-queue"><div class="op-section-label" style="margin-bottom:8px">Next In Queue</div>'+queue.map(item => '<div class="op-queue-item"><div class="op-queue-line"><span class="op-queue-author">'+esc(item.author)+'</span><span style="font-size:11px;color:'+(item.risk >= 50 ? '#fca5a5' : 'rgba(255,255,255,.36)')+'">'+item.risk+'/100</span></div><div class="op-queue-text">'+esc(item.text.substring(0, 88))+(item.text.length > 88 ? '...' : '')+'</div></div>').join('')+'</div>' : '')+'</div>'+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length > 1 ? '<div style="margin-top:14px"><button class="op-btn ghost" id="op-autofill" style="width:100%;justify-content:center">Auto-Fill Remaining '+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length - 1)+' comments</button></div>' : '');
+  
+  body.querySelector('#op-fix-now')?.addEventListener('click', () => {
+    orbitState.selectedIdx = focusIndex;
+    orbitState.view = 'layer1';
+    renderView();
+  });
+  body.querySelector('#op-focus-card')?.addEventListener('click', (e) => {
+    if (e.target.closest('#op-fix-now')) return;
+    orbitState.selectedIdx = focusIndex;
+    orbitState.view = 'layer1';
+    renderView();
+  });
+  body.querySelector('#op-autofill')?.addEventListener('click', () => bulkFill());
+}
+
+  const focusIndex = orbitComments.indexOf(focus);
+  const riskLabel = focus.risk >= 50 ? 'High Risk' : 'Reply Ready';
+  const statusTitle = urgent.length > 0 ? 'Action required' : 'Everything is under control';
+  const statusCopy = urgent.length > 0
+    ? urgent.length + ' customer' + (urgent.length > 1 ? 's may refund' : ' may refund')
+    : pending.length + ' comment' + (pending.length > 1 ? 's are waiting for a reply' : ' is waiting for a reply');
+
   body.innerHTML = '<div class="op-status-shell '+(urgent.length > 0 ? 'alert' : 'calm')+'"><div class="op-status-kicker">'+(urgent.length > 0 ? 'Action Required' : 'ORBIT')+'</div><h2 class="op-status-title">'+statusTitle+'</h2><p class="op-status-copy">'+statusCopy+'</p></div><div class="op-action-shell"><div class="op-section-label">Current Action</div><div class="op-action-card '+(focus.risk >= 50 ? 'risk' : '')+'" id="op-focus-card"><div class="op-action-top"><div><div class="op-action-author">'+esc(focus.author)+'</div><div class="op-action-meta">'+(focus.type === 'NEGATIVE' ? 'Potential refund risk' : focus.type.replace('_',' '))+' • Score '+focus.risk+'/100</div></div><span class="op-risk-chip '+(focus.risk >= 50 ? 'alert' : 'safe')+'">'+riskLabel+'</span></div><p class="op-action-quote">"'+esc(focus.text.substring(0, 180))+(focus.text.length > 180 ? '...' : '')+'"</p><div class="op-action-row"><div><div style="font-size:12px;color:rgba(255,255,255,.86);font-weight:600;margin-bottom:4px">Reply ready</div><div class="op-action-note">'+(focus.risk >= 50 ? 'This is the one comment to fix first.' : 'This comment is waiting for your response.')+'</div></div><button class="op-fix-btn" id="op-fix-now">Fix This Now</button></div>'+(queue.length ? '<div class="op-queue"><div class="op-section-label" style="margin-bottom:8px">Next In Queue</div>'+queue.map(item => '<div class="op-queue-item"><div class="op-queue-line"><span class="op-queue-author">'+esc(item.author)+'</span><span style="font-size:11px;color:'+(item.risk >= 50 ? '#fca5a5' : 'rgba(255,255,255,.36)')+'">'+item.risk+'/100</span></div><div class="op-queue-text">'+esc(item.text.substring(0, 88))+(item.text.length > 88 ? '...' : '')+'</div></div>').join('')+'</div>' : '')+'</div></div>'+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length > 1 ? '<div style="margin-top:14px"><button class="op-btn ghost" id="op-autofill" style="width:100%;justify-content:center">Auto-Fill Remaining '+(pending.length - 1)+'</button></div>' : '');
 
   body.querySelector('#op-fix-now')?.addEventListener('click', () => {
