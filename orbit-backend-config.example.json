@@ -1,0 +1,25 @@
+{
+  "orbitFirebaseConfig": {
+    "apiKey": "YOUR_FIREBASE_WEB_API_KEY",
+    "authDomain": "YOUR_PROJECT.firebaseapp.com",
+    "projectId": "YOUR_FIREBASE_PROJECT_ID",
+    "appId": "YOUR_FIREBASE_APP_ID"
+  },
+  "orbitBackendConfig": {
+    "geminiApiKey": "YOUR_GEMINI_API_KEY"
+  },
+  "authState": {
+    "signedIn": false,
+    "uid": null,
+    "email": null,
+    "idToken": null,
+    "refreshToken": null,
+    "signInTime": null
+  },
+  "usersDocumentExample": {
+    "plan": "pro",
+    "creditsUsed": 0,
+    "monthlyLimit": 500,
+    "lastReset": "2026-03-01T00:00:00.000Z"
+  }
+}

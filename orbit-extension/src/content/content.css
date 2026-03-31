@@ -12,20 +12,29 @@
 }
 
 #orbit-widget button:hover {
-  background: #00d4ff !important;
-  color: #1a1f36 !important;
+  background: var(--orbit-primary) !important;
+  color: var(--orbit-bg) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 245, 212, 0.3);
 }
 
 .orbit-reply-btn {
   transition: all 0.2s ease;
+  backdrop-filter: blur(5px);
 }
 
 .orbit-reply-btn:hover {
-  transform: scale(1.05);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(0, 245, 212, 0.4);
 }
 
 #orbit-analytics-panel {
   animation: orbit-slide-in 0.3s ease-out;
+  background: var(--orbit-bg) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid var(--orbit-border-dim) !important;
+  box-shadow: var(--orbit-shadow) !important;
+  border-radius: var(--orbit-radius) !important;
 }
 
 @keyframes orbit-slide-in {
@@ -49,13 +58,190 @@
 /* Price Display Styles */
 .orbit-price-display {
   animation: orbit-pulse 2s infinite;
+  position: relative;
+  overflow: hidden;
+}
+
+.orbit-price-display::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--orbit-primary), var(--orbit-accent));
 }
 
 @keyframes orbit-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.4);
+    box-shadow: 0 0 0 0 rgba(0, 245, 212, 0.4);
   }
   50% {
-    box-shadow: 0 0 0 15px rgba(255, 0, 0, 0);
+    box-shadow: 0 0 0 15px rgba(0, 245, 212, 0);
+  }
+}
+
+/* Glass effect for panels */
+#orbit-widget,
+#orbit-analytics-panel {
+  background: var(--orbit-bg) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid var(--orbit-border-dim) !important;
+  box-shadow: var(--orbit-shadow) !important;
+  border-radius: var(--orbit-radius) !important;
+  position: relative;
+}
+
+/* Glass enhancement overlay */
+#orbit-widget::before,
+#orbit-analytics-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Tab styling */
+.tab-btn {
+  background: var(--orbit-bg-card) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid var(--orbit-border-dim) !important;
+  color: var(--orbit-text-muted) !important;
+  border-radius: 12px !important;
+  padding: 10px 16px !important;
+  font-weight: 500 !important;
+  transition: var(--orbit-transition-fast) !important;
+}
+
+.tab-btn.active {
+  background: var(--orbit-primary) !important;
+  color: var(--orbit-bg) !important;
+  box-shadow: 0 0 15px rgba(0, 245, 212, 0.4) !important;
+}
+
+.tab-btn:hover:not(.active) {
+  background: rgba(0, 245, 212, 0.1) !important;
+  color: var(--orbit-primary) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 20px rgba(0, 245, 212, 0.2) !important;
+}
+
+/* Comment card styling */
+.comment-card {
+  background: var(--orbit-bg-card) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid var(--orbit-border-dim) !important;
+  border-radius: 14px !important;
+  padding: 16px !important;
+  margin-bottom: 12px !important;
+  transition: var(--orbit-transition-fast) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.comment-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: var(--orbit-shadow-sm) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.comment-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Risk score styling */
+.risk-score {
+  font-size: 24px !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  padding: 12px !important;
+  border-radius: 12px !important;
+  font-family: monospace !important;
+}
+
+.risk-score.low {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: var(--orbit-success) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+}
+
+.risk-score.medium {
+  background: rgba(245, 158, 11, 0.1) !important;
+  color: var(--orbit-warning) !important;
+  border: 1px solid rgba(245, 158, 11, 0.2) !important;
+}
+
+.risk-score.high {
+  background: rgba(239, 68, 68, 0.1) !important;
+  color: var(--orbit-danger) !important;
+  border: 1px solid rgba(239, 68, 68, 0.2) !important;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+/* Floating widget badge */
+.widget-badge {
+  background: var(--orbit-danger) !important;
+  color: var(--orbit-bg) !important;
+  border-radius: 50% !important;
+  padding: 2px 6px !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4) !important;
+  animation: pulse 2s infinite;
+}
+
+.widget-badge.active {
+  background: var(--orbit-success) !important;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4) !important;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(var(--orbit-badge-color, 239, 68, 68), 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(var(--orbit-badge-color, 239, 68, 68), 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--orbit-badge-color, 239, 68, 68), 0.4);
   }
 }

@@ -6,8 +6,13 @@
   "permissions": [
     "storage",
     "activeTab",
-    "scripting"
+    "scripting",
+    "identity"
   ],
+  "oauth2": {
+    "client_id": "REPLACE_WITH_GOOGLE_OAUTH_CLIENT_ID",
+    "scopes": ["openid", "email", "profile"]
+  },
   "host_permissions": [
     "https://appsumo.com/*",
     "https://*.appsumo.com/*",
@@ -22,6 +27,9 @@
     "https://api.openai.com/*",
     "https://generativelanguage.googleapis.com/*",
     "https://api.groq.com/*",
+    "https://identitytoolkit.googleapis.com/*",
+    "https://securetoken.googleapis.com/*",
+    "https://firestore.googleapis.com/*",
     "*://hooks.slack.com/*",
     "*://*.webhook.site/*",
     "*://*.discord.com/*"

@@ -98,29 +98,27 @@
 
     /* Sidebar */
     .sidebar {
-      width: 240px;
+      width: 96px;
       background: #141821;
       border-right: 1px solid #2d3748;
-      padding: 20px 0;
+      padding: 18px 0;
       position: fixed;
       top: 60px;
       bottom: 0;
       left: 0;
       overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
 
     .sidebar-section {
       padding: 0 12px;
-      margin-bottom: 24px;
+      margin-bottom: 16px;
     }
 
     .sidebar-title {
-      font-size: 11px;
-      text-transform: uppercase;
-      color: #4a5568;
-      padding: 0 12px;
-      margin-bottom: 8px;
-      letter-spacing: 0.5px;
+      display: none;
     }
 
     .sidebar-menu {
@@ -131,13 +129,16 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 10px 12px;
-      border-radius: 8px;
+      padding: 12px 10px;
+      border-radius: 12px;
       color: #8b92a8;
-      font-size: 14px;
+      font-size: 13px;
       cursor: pointer;
       transition: all 0.2s;
-      margin-bottom: 2px;
+      margin-bottom: 6px;
+      justify-content: center;
+      flex-direction: column;
+      text-align: center;
     }
 
     .sidebar-item:hover {
@@ -153,15 +154,185 @@
     }
 
     .sidebar-item-icon {
-      font-size: 16px;
+      font-size: 18px;
       width: 20px;
       text-align: center;
+    }
+
+    .sidebar-item-label {
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .sidebar-item.settings-short {
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border-radius: 12px;
+      margin: 0 auto;
+    }
+
+    .sidebar-item.settings-short .sidebar-item-label {
+      display: none;
+    }
+
+    .sidebar .sidebar-item[data-page="overview"],
+    .sidebar .sidebar-item[data-page="sales"],
+    .sidebar .sidebar-item[data-page="deals"],
+    .sidebar .sidebar-section:last-child {
+      display: none;
+    }
+
+    .sidebar .sidebar-item[data-page="comments"] {
+      min-height: 52px;
+    }
+
+    .sidebar .sidebar-item[data-page="settings"] {
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border-radius: 12px;
+      margin: 0 auto;
+      font-size: 0;
+    }
+
+    .product-selector {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .product-tab {
+      padding: 9px 14px;
+      border-radius: 999px;
+      border: 1px solid #2d3748;
+      background: transparent;
+      color: #8b92a8;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .product-tab:hover {
+      border-color: #00d4ff;
+      color: #00d4ff;
+    }
+
+    .product-tab.active {
+      background: rgba(0, 212, 255, 0.14);
+      border-color: rgba(0, 212, 255, 0.25);
+      color: #00d4ff;
+    }
+
+    .product-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .product-context-card {
+      background: linear-gradient(135deg, rgba(26, 31, 46, 0.95) 0%, rgba(20, 24, 33, 0.98) 100%);
+      border: 1px solid #2d3748;
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 18px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+    }
+
+    .product-context-kicker {
+      color: #00d4ff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .product-context-title {
+      color: #fff;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .product-context-description {
+      color: #8b92a8;
+      font-size: 14px;
+      line-height: 1.7;
+      margin-bottom: 12px;
+      max-width: 900px;
+    }
+
+    .product-context-meta {
+      color: #5eead4;
+      font-size: 12px;
+      word-break: break-word;
+    }
+
+    .product-stat {
+      background: #1a1f2e;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .product-stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .product-stat-label {
+      font-size: 12px;
+      color: #8b92a8;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .comments-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .comments-product-label {
+      font-size: 13px;
+      color: #8b92a8;
+    }
+
+    .reply-all-btn {
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, #00d4ff, #00a3cc);
+      color: #0f1419;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .reply-all-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(0, 212, 255, 0.22);
+    }
+
+    .reply-all-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
     }
 
     /* Main Content */
     .main-content {
       flex: 1;
-      margin-left: 240px;
+      margin-left: 96px;
       padding: 24px;
       background: #0f1419;
     }
@@ -852,11 +1023,11 @@
       <div class="sidebar-section">
         <div class="sidebar-title">Main</div>
         <ul class="sidebar-menu">
-          <li class="sidebar-item active" data-page="overview">
+          <li class="sidebar-item" data-page="overview">
             <span class="sidebar-item-icon">📊</span>
             Overview
           </li>
-          <li class="sidebar-item" data-page="comments">
+          <li class="sidebar-item active" data-page="comments">
             <span class="sidebar-item-icon">💬</span>
             Comments
           </li>
@@ -868,7 +1039,7 @@
             <span class="sidebar-item-icon">🎁</span>
             Deals
           </li>
-          <li class="sidebar-item" data-page="settings">
+          <li class="sidebar-item settings-short" data-page="settings">
             <span class="sidebar-item-icon">⚙️</span>
             Settings
           </li>
@@ -877,15 +1048,15 @@
       <div class="sidebar-section">
         <div class="sidebar-title">Products</div>
         <ul class="sidebar-menu">
-          <li class="sidebar-item">
+          <li class="sidebar-item" data-product="Productivity Pro">
             <span class="sidebar-item-icon">✨</span>
             Productivity Pro
           </li>
-          <li class="sidebar-item">
+          <li class="sidebar-item" data-product="Task Master">
             <span class="sidebar-item-icon">🎯</span>
             Task Master
           </li>
-          <li class="sidebar-item">
+          <li class="sidebar-item" data-product="Email Helper">
             <span class="sidebar-item-icon">📧</span>
             Email Helper
           </li>
@@ -906,7 +1077,7 @@
       </div>
 
       <!-- Overview Section -->
-      <section id="overview" class="page-section active">
+      <section id="overview" class="page-section">
         <div class="page-header">
           <h1>Dashboard Overview</h1>
           <p>Track your product performance and customer engagement</p>
@@ -941,10 +1112,21 @@
       </section>
 
       <!-- Comments Section -->
-      <section id="comments" class="page-section">
+      <section id="comments" class="page-section active">
         <div class="page-header">
           <h1>Comments & Reviews</h1>
           <p>Manage customer feedback and respond to questions</p>
+        </div>
+
+        <div class="product-selector" id="product-selector"></div>
+
+        <div class="product-context-card" id="product-context-card"></div>
+
+        <div class="product-stats" id="product-stats"></div>
+
+        <div class="comments-actions">
+          <div class="comments-product-label" id="comments-product-label">Showing comments for All Products</div>
+          <button class="reply-all-btn" id="reply-all-pending">⚡ Reply All Pending</button>
         </div>
 
         <div class="section-header">
