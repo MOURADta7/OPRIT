@@ -86,6 +86,48 @@ function updateBadgeTheme(theme) {
   });
 }
 
+// THEME TOGGLE
+function toggleTheme() {
+  currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  applyThemeToDOM(currentTheme);
+  try {
+    chrome.storage.local.set({ orbitTheme: currentTheme });
+  } catch(e) {}
+  const panel = document.getElementById('orbit-panel');
+  if (panel) {
+    const toggle = panel.querySelector('#orbit-theme-toggle');
+    if (toggle) {
+      const moonIcon = toggle.querySelector('.theme-icon-moon');
+      const sunIcon = toggle.querySelector('.theme-icon-sun');
+      if (currentTheme === 'light') {
+        if (moonIcon) moonIcon.style.display = 'none';
+        if (sunIcon) sunIcon.style.display = 'block';
+      } else {
+        if (moonIcon) moonIcon.style.display = 'block';
+        if (sunIcon) sunIcon.style.display = 'none';
+      }
+    }
+  }
+}
+
+// PANEL SIZE PERSISTENCE
+function savePanelSize(panel) {
+  try {
+    const width = panel.offsetWidth;
+    chrome.storage.local.set({ orbitPanelWidth: width });
+  } catch(e) {}
+}
+
+function restorePanelSize(panel) {
+  try {
+    chrome.storage.local.get('orbitPanelWidth', (r) => {
+      if (r.orbitPanelWidth && r.orbitPanelWidth >= 340 && r.orbitPanelWidth <= 680) {
+        panel.style.width = r.orbitPanelWidth + 'px';
+      }
+    });
+  } catch(e) {}
+}
+
 // Listen for messages from popup
 if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -139,6 +181,7 @@ const ADAPTERS = [
 ];
 let activeAdapter = null;
 function getAdapter() { if (activeAdapter) return activeAdapter; activeAdapter = ADAPTERS.find(a=>a.detect())||ADAPTERS[3]; return activeAdapter; }
+function isSalesPage() { const id=getAdapter()?.id; return id==='appsumo'||id==='gumroad'||id==='lemonsqueezy'; }
 function getContainers() {
   const a = getAdapter();
   const root = (a.id==='universal') ? (document.querySelector('main,[role="main"],.main-content,.content,#content,article')||document.body) : document.body;
@@ -178,7 +221,7 @@ function hashStr(s) { let h=0; for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCo
 function esc(t) { const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
 function fmtTime(m) { if(m<60) return m+'m'; const h=Math.floor(m/60),r=m%60; return r>0?h+'h '+r+'m':h+'h'; }
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const COLORS = {NEGATIVE:'#ef4444',QUESTION:'#3b82f6',FEATURE:'#8b5cf6',POSITIVE_FEATURE:'#f59e0b',POSITIVE:'#10b981',NEUTRAL:'#6b7280',NON_ENGLISH:'#ec4899',CRITICAL:'#dc2626'};
+const COLORS = {NEGATIVE:'#ef4444',QUESTION:'#3b82f6',FEATURE:'#8b5cf6',POSITIVE_FEATURE:'#f59e0b',POSITIVE:'#10b981',NEUTRAL:'#4A5568',NON_ENGLISH:'#ec4899',CRITICAL:'#ff006e'};
 
 // SECTION 3: UI SYSTEM
 function injectPanelCSS() {
@@ -188,136 +231,116 @@ function injectPanelCSS() {
 @keyframes orbitSlideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes orbitFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-@keyframes pulseGlow{0%,100%{box-shadow:0 0 20px rgba(6,182,212,0.4),0 0 40px rgba(6,182,212,0.2)}50%{box-shadow:0 0 30px rgba(6,182,212,0.6),0 0 60px rgba(6,182,212,0.3)}}
-@keyframes riskPulse{0%,100%{box-shadow:0 0 20px rgba(239,68,68,0.5),0 0 40px rgba(239,68,68,0.3)}50%{box-shadow:0 0 35px rgba(239,68,68,0.7),0 0 70px rgba(239,68,68,0.4)}}
-#orbit-widget{position:fixed;bottom:28px;right:28px;z-index:9999999 !important;cursor:pointer;width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#0891b2,#7c3aed);display:flex !important;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(6,182,212,0.3),0 0 0 1px rgba(255,255,255,0.1);transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1);font-family:'Inter',system-ui,-apple-system,sans-serif !important}
-#orbit-widget:hover{transform:scale(1.1) translateY(-2px);box-shadow:0 12px 40px rgba(6,182,212,0.5),0 0 0 2px rgba(6,182,212,0.3)}
-#orbit-widget.risks{animation:riskPulse 2s infinite;background:linear-gradient(135deg,#dc2626,#f97316)}
+@keyframes pulseGlow{0%,100%{box-shadow:0 0 20px rgba(0,245,212,0.4),0 0 40px rgba(0,245,212,0.2)}50%{box-shadow:0 0 30px rgba(0,245,212,0.6),0 0 60px rgba(0,245,212,0.3)}}
+@keyframes riskPulse{0%,100%{box-shadow:0 0 20px rgba(255,0,110,0.5),0 0 40px rgba(255,0,110,0.3)}50%{box-shadow:0 0 35px rgba(255,0,110,0.7),0 0 70px rgba(255,0,110,0.4)}}
+@keyframes riskGlow{from{text-shadow:0 0 15px rgba(255,0,110,0.5),0 0 30px rgba(239,68,68,0.2)}to{text-shadow:0 0 25px rgba(255,0,110,0.7),0 0 50px rgba(239,68,68,0.4)}}
+#orbit-widget{position:fixed;bottom:28px;right:28px;z-index:9999999 !important;cursor:pointer;width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#00f5d4,#7c3aed) !important;display:flex !important;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(0,245,212,0.3),0 0 0 1px rgba(255,255,255,0.1);transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1);font-family:'Inter',system-ui,-apple-system,sans-serif !important}
+#orbit-widget:hover{transform:scale(1.1) translateY(-2px);box-shadow:0 12px 40px rgba(0,245,212,0.5),0 0 0 2px rgba(0,245,212,0.3)}
+#orbit-widget.risks{animation:riskPulse 2s infinite;background:linear-gradient(135deg,#ff006e,#ef4444) !important}
 #orbit-widget .badge{position:absolute;top:-6px;right:-6px;background:#fff;color:#0d0d0d;font-size:11px;font-weight:800;min-width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.3);z-index:99999999 !important}
-#orbit-panel{position:fixed;top:0;right:0;width:420px;height:100vh;background:linear-gradient(180deg,rgba(15,23,42,0.97) 0%,rgba(15,15,26,0.98) 100%);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border-left:1px solid rgba(148,163,184,0.1);z-index:9999998 !important;display:flex !important;flex-direction:column;font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;transform:translateX(100%);transition:all 0.5s cubic-bezier(0.16, 1, 0.3, 1);box-shadow:-20px 0 60px rgba(0,0,0,0.5)}
+#orbit-panel{position:fixed;top:0;right:0;width:420px;min-width:340px;max-width:680px;height:100vh;background:rgba(232,245,233,0.98) !important;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-left:1px solid rgba(76,175,80,0.2);z-index:9999998 !important;display:flex !important;flex-direction:column;font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;transform:translateX(100%);transition:all 0.5s cubic-bezier(0.16, 1, 0.3, 1);box-shadow:-20px 0 60px rgba(0,0,0,0.15);resize:horizontal;overflow:hidden}
 #orbit-panel.visible{transform:translateX(0) !important}
-.op-header{padding:18px 24px;background:linear-gradient(180deg,rgba(6,182,212,0.08) 0%,transparent 100%);border-bottom:1px solid rgba(148,163,184,0.08);display:flex;align-items:center;justify-content:space-between}
-.op-header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(6,182,212,0.5),transparent)}
-.op-header .title{display:flex;align-items:center;gap:12px;font-size:16px;font-weight:700;color:#f8fafc}
-.op-header .orbit-status{display:flex;align-items:center;justify-content:center;gap:10px;flex:1;font-size:13px;font-weight:600}
-.op-header .orbit-status .status-icon{font-size:16px}
-.op-header .orbit-status .status-text{color:#22d3ee;text-shadow:0 0 20px rgba(34,211,238,0.5)}
-.op-header .orbit-status.alert .status-text{color:#f87171;text-shadow:0 0 20px rgba(248,113,113,0.5)}
-.op-header .live{background:#22d3ee;width:8px;height:8px;border-radius:50%;box-shadow:0 0 12px #22d3ee,0 0 24px rgba(34,211,238,0.4)}
-.op-header .close{background:rgba(255,255,255,0.05);border:none;color:#94a3b8;font-size:18px;cursor:pointer;padding:8px 12px;border-radius:8px;transition:all 0.2s}
-.op-header .close:hover{background:rgba(255,255,255,0.1);color:#f8fafc}
-.op-nav{display:flex;border-bottom:1px solid rgba(148,163,184,0.08);background:rgba(0,0,0,0.2);padding:0 12px}
-.op-nav button{flex:1;padding:14px 0;background:none;border:none;border-bottom:2px solid transparent;color:#64748b;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.3s ease;position:relative}
-.op-nav button::after{content:'';position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);width:0;height:2px;background:linear-gradient(90deg,#06b6d4,#8b5cf6);transition:width 0.3s ease}
-.op-nav button.active{color:#f8fafc}
-.op-nav button.active::after{width:60%}
-.op-nav button:hover{color:#cbd5e1}
-.op-body{flex:1;overflow-y:auto;padding:24px;scrollbar-width:thin;scrollbar-color:rgba(6,182,212,0.2) transparent;background:radial-gradient(ellipse at top,rgba(6,182,212,0.03) 0%,transparent 50%)}
-.op-body::-webkit-scrollbar{width:6px}.op-body::-webkit-scrollbar-thumb{background:rgba(148,163,184,0.2);border-radius:3px}
-.op-footer{padding:16px 24px;border-top:1px solid rgba(148,163,184,0.08);background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:space-between;font-size:12px;color:#64748b}
-.op-card{background:linear-gradient(135deg,rgba(30,41,59,0.8) 0%,rgba(15,23,42,0.9) 100%);border:1px solid rgba(148,163,184,0.1);border-radius:16px;padding:20px;margin-bottom:16px;animation:orbitFade 0.4s ease;transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1);position:relative;overflow:hidden}
-.op-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(6,182,212,0.3),transparent)}
-.op-card:hover{background:linear-gradient(135deg,rgba(41,55,79,0.9) 0%,rgba(20,30,50,0.95) 100%);border-color:rgba(6,182,212,0.3);transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,0.3)}
-.op-banner{margin:0 0 16px;padding:16px 20px;border-radius:14px;background:linear-gradient(135deg,rgba(6,182,212,0.15) 0%,rgba(139,92,246,0.1) 100%);border:1px solid rgba(6,182,212,0.2);color:#e2e8f0;display:flex;align-items:center;gap:14px;font-size:13px;font-weight:500;position:relative;overflow:hidden}
-.op-banner::after{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:linear-gradient(45deg,transparent,rgba(255,255,255,0.03),transparent);animation:shimmer 3s infinite}
-.op-banner .dot{width:10px;height:10px;border-radius:50%;background:#22d3ee;box-shadow:0 0 12px #22d3ee,0 0 24px rgba(34,211,238,0.5)}
-.op-banner .sub{font-size:12px;font-weight:400;color:#94a3b8}
-.op-card.urgent{border-left:4px solid #ef4444;background:linear-gradient(135deg,rgba(127,29,29,0.3) 0%,rgba(15,23,42,0.9) 100%]}
-.op-card.question{border-left:4px solid #3b82f6}.op-card.feature{border-left:4px solid #8b5cf6}.op-card.positive{border-left:4px solid #10b981}
-.op-badge{display:inline-block;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:rgba(6,182,212,0.15);color:#22d3ee;border:1px solid rgba(6,182,212,0.2)}
-.op-btn{padding:12px 24px;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1);display:inline-flex;align-items:center;gap:10px;position:relative;overflow:hidden}
-.op-btn::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);transition:left 0.5s}
-.op-btn:hover::before{left:100%}
-.op-btn:hover{transform:translateY(-2px)}
-.op-btn.primary{background:linear-gradient(135deg,#06b6d4,#8b5cf6);color:#fff;box-shadow:0 8px 24px rgba(6,182,212,0.4)}
-.op-btn.primary:hover{box-shadow:0 12px 32px rgba(6,182,212,0.5)}
-.op-btn.success{background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 8px 24px rgba(16,185,129,0.3)}
-.op-btn.success:hover{box-shadow:0 12px 32px rgba(16,185,129,0.4)}
-.op-btn.danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;box-shadow:0 8px 24px rgba(239,68,68,0.3)}
-.op-btn.danger:hover{box-shadow:0 12px 32px rgba(239,68,68,0.5)}
-.op-btn.ghost{background:rgba(255,255,255,0.05);color:#e2e8f0;border:1px solid rgba(255,255,255,0.1)}
-.op-btn.ghost:hover{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2)}
-.op-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.op-fix-btn{background:linear-gradient(135deg,#f97316,#ef4444) !important;color:#fff !important;font-weight:700 !important;padding:14px 28px !important;border-radius:12px !important;box-shadow:0 8px 24px rgba(249,115,22,0.4) !important;animation:pulseGlow 2s infinite}
-.op-fix-btn:hover{box-shadow:0 12px 32px rgba(249,115,22,0.6) !important}
-.op-input{width:100%;padding:14px 16px;background:rgba(15,23,42,0.8);border:1px solid rgba(148,163,184,0.15);border-radius:12px;color:#f8fafc;font-size:13px;box-sizing:border-box;outline:none;font-family:inherit;transition:all 0.3s}
-.op-input:focus{border-color:#06b6d4;box-shadow:0 0 0 3px rgba(6,182,212,0.15);background:rgba(15,23,42,1)}
-.op-metric{text-align:center;padding:20px;background:linear-gradient(135deg,rgba(30,41,59,0.6) 0%,rgba(15,23,42,0.8) 100%);border-radius:16px;border:1px solid rgba(148,163,184,0.1)}
-.op-metric .val{font-size:32px;font-weight:800;background:linear-gradient(135deg,#22d3ee,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.op-metric .lbl{font-size:11px;color:#64748b;text-transform:uppercase;margin-top:6px;letter-spacing:1px}
-.op-risk-bar{height:8px;border-radius:4px;background:rgba(15,23,42,0.8);overflow:hidden;margin:8px 0}
-.op-risk-bar .fill{height:100%;border-radius:4px;transition:width 0.5s ease;background:linear-gradient(90deg,#06b6d4,#8b5cf6)}
-.op-tabs{display:flex;gap:6px;margin-bottom:16px}
-.op-tabs button{padding:8px 16px;border-radius:20px;border:1px solid rgba(148,163,184,0.15);background:transparent;color:#64748b;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.3s}
-.op-tabs button.active{background:linear-gradient(135deg,#06b6d4,#8b5cf6);color:#fff;border-color:transparent;box-shadow:0 4px 16px rgba(6,182,212,0.3)}
-.op-tabs button:hover:not(.active){border-color:#06b6d4;color:#22d3ee}
-.op-lock{background:linear-gradient(135deg,rgba(139,92,246,0.1) 0%,rgba(15,23,42,0.8) 100%);border:1px dashed rgba(139,92,246,0.3);border-radius:14px;padding:20px;text-align:center;margin:14px 0}
-.op-lock p{color:#94a3b8;font-size:12px;margin:6px 0}
-.orbit-bar-mini{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(15,23,42,0.9);border-radius:8px;border:1px solid rgba(148,163,184,0.1);font-size:11px;font-family:'Inter',system-ui,sans-serif;margin:4px 0;backdrop-filter:blur(10px);box-shadow:0 4px 12px rgba(0,0,0,0.2)}
-.op-status-shell{padding:24px 4px 16px}
-.op-status-kicker{font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;margin-bottom:12px;background:linear-gradient(90deg,#22d3ee,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.op-status-title{font-size:32px;line-height:1.1;font-weight:800;color:#f8fafc;margin:0 0 12px;letter-spacing:-0.02em}
-.op-status-copy{font-size:15px;line-height:1.7;color:#94a3b8;max-width:340px}
-.op-status-shell.calm .op-status-kicker{background:linear-gradient(90deg,#22d3ee,#10b981);-webkit-background-clip:text}
-.op-status-shell.alert .op-status-kicker{background:linear-gradient(90deg,#f97316,#ef4444);-webkit-background-clip:text}
-.op-action-shell{margin-top:12px}
-.op-section-label{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.42);margin:0 0 12px}
-.op-action-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);border-radius:16px;padding:16px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 18px 40px rgba(0,0,0,.18)}
-.op-action-card.risk{border-color:rgba(239,68,68,.18);box-shadow:0 18px 40px rgba(0,0,0,.18),0 0 0 1px rgba(239,68,68,.06)}
-.op-action-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
-.op-action-author{font-size:18px;font-weight:600;color:#f8fafc;line-height:1.2}
-.op-action-meta{font-size:12px;color:rgba(255,255,255,.42);margin-top:4px}
-.op-action-quote{font-size:15px;line-height:1.65;color:rgba(255,255,255,.88);margin:0 0 14px}
-.op-action-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.op-action-note{font-size:12px;color:rgba(255,255,255,.56)}
-.op-risk-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.04em}
-.op-risk-chip.alert{background:rgba(239,68,68,.12);color:#fca5a5;border:1px solid rgba(239,68,68,.14)}
-.op-risk-chip.safe{background:rgba(45,212,191,.1);color:#5eead4;border:1px solid rgba(45,212,191,.12)}
-.op-fix-btn{padding:11px 18px;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;color:#fff;background:linear-gradient(135deg,#0ea5a4,#14b8a6);box-shadow:0 0 0 rgba(20,184,166,0);transition:all .2s ease}
-.op-fix-btn:hover{transform:translateY(-1px);box-shadow:0 0 20px rgba(20,184,166,.35)}
-.op-queue{margin-top:12px;border-top:1px solid rgba(255,255,255,.05);padding-top:12px}
-.op-queue-item{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)}
-.op-queue-item:last-child{border-bottom:none;padding-bottom:0}
-.op-queue-line{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.op-queue-author{font-size:13px;font-weight:600;color:rgba(255,255,255,.88)}
-.op-queue-text{font-size:12px;color:rgba(255,255,255,.52);line-height:1.5;margin-top:4px}
-.op-product-bar{display:flex;gap:6px;padding:8px 16px;background:#0c0c18;border-bottom:1px solid rgba(255,255,255,.04);overflow-x:auto;scrollbar-width:none}
-.op-product-bar::-webkit-scrollbar{display:none}
-.op-product-bar .ptab{padding:5px 12px;border-radius:16px;border:1px solid rgba(255,255,255,.08);background:transparent;color:#6b7280;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
-.op-product-bar .ptab.active{background:rgba(124,58,237,.15);color:#a78bfa;border-color:rgba(124,58,237,.3)}
-.op-product-bar .ptab:hover{color:#c4b5fd;border-color:rgba(124,58,237,.2)}
-.op-product-bar .ptab .pcount{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:8px;font-size:9px;font-weight:700;margin-left:4px;background:rgba(255,255,255,.08);color:#9ca3af}
-.op-product-bar .ptab.active .pcount{background:rgba(124,58,237,.3);color:#c4b5fd}
+#orbit-panel .op-header,#orbit-panel .op-header .title,#orbit-panel .op-status-title,#orbit-panel .op-action-author,#orbit-panel .op-action-quote,#orbit-panel .op-queue-author,#orbit-panel .op-card p,#orbit-panel .op-banner{color:#1B5E20 !important}
+#orbit-panel .op-status-copy,#orbit-panel .op-action-meta,#orbit-panel .op-action-note,#orbit-panel .op-queue-text,#orbit-panel .op-banner .sub,#orbit-panel .op-section-label,#orbit-panel .op-metric .lbl,#orbit-panel .op-lock p,#orbit-panel .op-nav button,#orbit-panel .op-tabs button,#orbit-panel .op-footer,#orbit-panel .op-header .close{color:#4A5568 !important}
+#orbit-panel .op-header{padding:18px 24px;background:rgba(255,255,255,0.5);border-bottom:1px solid rgba(76,175,80,0.15);display:flex;align-items:center;justify-content:space-between}
+#orbit-panel .op-header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(76,175,80,0.4),transparent)}
+#orbit-panel .op-header .title{display:flex;align-items:center;gap:12px;font-size:16px;font-weight:700;color:#1B5E20 !important}
+#orbit-panel .op-header .orbit-status{display:flex;align-items:center;justify-content:center;gap:10px;flex:1;font-size:13px;font-weight:600}
+#orbit-panel .op-header .orbit-status .status-icon{font-size:16px}
+#orbit-panel .op-header .orbit-status .status-text{color:#2E7D32 !important;text-shadow:none}
+#orbit-panel .op-header .orbit-status.alert .status-text{color:#ff006e !important;text-shadow:0 0 20px rgba(255,0,110,0.3)}
+#orbit-panel .op-header .live{background:#2E7D32;width:8px;height:8px;border-radius:50%;box-shadow:0 0 12px rgba(46,125,50,0.4)}
+#orbit-panel .op-header .close{background:rgba(0,0,0,0.04);border:none;color:#4A5568 !important;font-size:18px;cursor:pointer;padding:8px 12px;border-radius:8px;transition:all 0.2s}
+#orbit-panel .op-header .close:hover{background:rgba(0,0,0,0.08);color:#1B5E20 !important}
+#orbit-panel .op-nav{display:flex;border-bottom:1px solid rgba(76,175,80,0.15);background:rgba(255,255,255,0.3);padding:0 12px}
+#orbit-panel .op-nav button{flex:1;padding:14px 0;background:none;border:none;border-bottom:2px solid transparent;color:#4A5568 !important;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.3s ease;position:relative}
+#orbit-panel .op-nav button::after{content:'';position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);width:0;height:2px;background:linear-gradient(90deg,#00f5d4,#7c3aed);transition:width 0.3s ease}
+#orbit-panel .op-nav button.active{color:#1B5E20 !important}
+#orbit-panel .op-nav button.active::after{width:60%}
+#orbit-panel .op-nav button:hover{color:#1B5E20 !important}
+#orbit-panel .op-body{flex:1;overflow-y:auto;padding:24px;scrollbar-width:thin;scrollbar-color:rgba(76,175,80,0.3) transparent;background:transparent}
+#orbit-panel .op-body::-webkit-scrollbar{width:6px}.#orbit-panel .op-body::-webkit-scrollbar-thumb{background:rgba(76,175,80,0.3);border-radius:3px}
+#orbit-panel .op-footer{padding:16px 24px;border-top:1px solid rgba(76,175,80,0.15);background:rgba(255,255,255,0.4);display:flex;align-items:center;justify-content:space-between;font-size:12px;color:#4A5568 !important}
+#orbit-panel .op-card{background:rgba(255,255,255,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(76,175,80,0.15);border-radius:16px;padding:20px;margin-bottom:16px;animation:orbitFade 0.4s ease;transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1);position:relative;overflow:hidden}
+#orbit-panel .op-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(76,175,80,0.2),transparent)}
+#orbit-panel .op-card:hover{background:rgba(255,255,255,0.95);border-color:rgba(76,175,80,0.25);transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,0.08)}
+#orbit-panel .op-banner{margin:0 0 16px;padding:16px 20px;border-radius:14px;background:linear-gradient(135deg,rgba(0,245,212,0.08) 0%,rgba(139,92,246,0.05) 100%);border:1px solid rgba(0,245,212,0.15);color:#1B5E20 !important;display:flex;align-items:center;gap:14px;font-size:13px;font-weight:500;position:relative;overflow:hidden}
+#orbit-panel .op-banner::after{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:linear-gradient(45deg,transparent,rgba(0,0,0,0.02),transparent);animation:shimmer 3s infinite}
+#orbit-panel .op-banner .dot{width:10px;height:10px;border-radius:50%;background:#00f5d4;box-shadow:0 0 12px rgba(0,245,212,0.4)}
+#orbit-panel .op-banner .sub{font-size:12px;font-weight:400;color:#4A5568 !important}
+#orbit-panel .op-card.urgent{border-left:4px solid #ff006e;background:linear-gradient(135deg,rgba(254,226,226,0.5) 0%,rgba(255,255,255,0.9) 100%)}
+#orbit-panel .op-card.question{border-left:4px solid #3b82f6}#orbit-panel .op-card.feature{border-left:4px solid #8b5cf6}#orbit-panel .op-card.positive{border-left:4px solid #10b981}
+#orbit-panel .op-badge{display:inline-block;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:rgba(0,245,212,0.1);color:#00c8b2 !important;border:1px solid rgba(0,245,212,0.15)}
+#orbit-panel .op-btn{padding:12px 24px;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1);display:inline-flex;align-items:center;gap:10px;position:relative;overflow:hidden}
+#orbit-panel .op-btn::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);transition:left 0.5s}
+#orbit-panel .op-btn:hover::before{left:100%}
+#orbit-panel .op-btn:hover{transform:translateY(-2px)}
+#orbit-panel .op-btn.primary{background:linear-gradient(135deg,#00f5d4,#7c3aed);color:#FFFFFF !important;box-shadow:0 8px 24px rgba(0,245,212,0.3)}
+#orbit-panel .op-btn.primary:hover{box-shadow:0 12px 32px rgba(0,245,212,0.4)}
+#orbit-panel .op-btn.success{background:linear-gradient(135deg,#10b981,#059669);color:#FFFFFF !important;box-shadow:0 8px 24px rgba(16,185,129,0.2)}
+#orbit-panel .op-btn.success:hover{box-shadow:0 12px 32px rgba(16,185,129,0.3)}
+#orbit-panel .op-btn.danger{background:linear-gradient(135deg,#ff006e,#ef4444);color:#FFFFFF !important;box-shadow:0 8px 24px rgba(255,0,110,0.2)}
+#orbit-panel .op-btn.danger:hover{box-shadow:0 12px 32px rgba(255,0,110,0.3)}
+#orbit-panel .op-btn.ghost{background:rgba(0,0,0,0.04);color:#1B5E20 !important;border:1px solid rgba(76,175,80,0.15)}
+#orbit-panel .op-btn.ghost:hover{background:rgba(0,0,0,0.08);border-color:rgba(76,175,80,0.25)}
+#orbit-panel .op-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+#orbit-panel .op-fix-btn{background:linear-gradient(135deg,#ff006e,#ef4444) !important;color:#FFFFFF !important;font-weight:700 !important;padding:14px 28px !important;border-radius:12px !important;box-shadow:0 8px 24px rgba(255,0,110,0.3) !important;animation:pulseGlow 2s infinite}
+#orbit-panel .op-fix-btn:hover{box-shadow:0 12px 32px rgba(255,0,110,0.4) !important}
+#orbit-panel .op-input{width:100%;padding:14px 16px;background:rgba(255,255,255,0.9);border:1px solid rgba(76,175,80,0.15);border-radius:12px;color:#1B5E20 !important;font-size:13px;box-sizing:border-box;outline:none;font-family:inherit;transition:all 0.3s}
+#orbit-panel .op-input:focus{border-color:#00f5d4;box-shadow:0 0 0 3px rgba(0,245,212,0.1);background:rgba(255,255,255,1)}
+#orbit-panel .op-metric{text-align:center;padding:20px;background:rgba(255,255,255,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-radius:16px;border:1px solid rgba(76,175,80,0.15)}
+#orbit-panel .op-metric .val{font-size:32px;font-weight:800;background:linear-gradient(135deg,#00f5d4,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+#orbit-panel .op-metric .lbl{font-size:11px;color:#4A5568 !important;text-transform:uppercase;margin-top:6px;letter-spacing:1px}
+#orbit-panel .op-risk-bar{height:8px;border-radius:4px;background:rgba(0,0,0,0.06);overflow:hidden;margin:8px 0}
+#orbit-panel .op-risk-bar .fill{height:100%;border-radius:4px;transition:width 0.5s ease;background:linear-gradient(90deg,#00f5d4,#7c3aed)}
+#orbit-panel .op-tabs{display:flex;gap:6px;margin-bottom:16px}
+#orbit-panel .op-tabs button{padding:8px 16px;border-radius:20px;border:1px solid rgba(76,175,80,0.15);background:transparent;color:#4A5568 !important;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.3s}
+#orbit-panel .op-tabs button.active{background:linear-gradient(135deg,#00f5d4,#7c3aed);color:#FFFFFF !important;border-color:transparent;box-shadow:0 4px 16px rgba(0,245,212,0.2)}
+#orbit-panel .op-tabs button:hover:not(.active){border-color:#00f5d4;color:#1B5E20 !important}
+#orbit-panel .op-lock{background:linear-gradient(135deg,rgba(139,92,246,0.05) 0%,rgba(255,255,255,0.8) 100%);border:1px dashed rgba(139,92,246,0.2);border-radius:14px;padding:20px;text-align:center;margin:14px 0}
+#orbit-panel .op-lock p{color:#4A5568 !important;font-size:12px;margin:6px 0}
+#orbit-panel .orbit-bar-mini{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(255,255,255,0.9);border-radius:8px;border:1px solid rgba(76,175,80,0.15);font-size:11px;font-family:'Inter',system-ui,sans-serif;margin:4px 0;backdrop-filter:blur(10px);box-shadow:0 4px 12px rgba(0,0,0,0.06)}
+#orbit-panel .op-status-shell{padding:24px 4px 16px}
+#orbit-panel .op-status-kicker{font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;margin-bottom:12px;background:linear-gradient(90deg,#00f5d4,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+#orbit-panel .op-status-title{font-size:32px;line-height:1.1;font-weight:800;color:#1B5E20 !important;margin:0 0 12px;letter-spacing:-0.02em}
+#orbit-panel .op-status-copy{font-size:15px;line-height:1.7;color:#4A5568 !important;max-width:100%}
+#orbit-panel .op-status-shell.calm .op-status-kicker{background:linear-gradient(90deg,#00f5d4,#10b981);-webkit-background-clip:text}
+#orbit-panel .op-status-shell.alert .op-status-kicker{background:linear-gradient(90deg,#ff006e,#ef4444);-webkit-background-clip:text}
+#orbit-panel .op-action-shell{margin-top:12px}
+#orbit-panel .op-section-label{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#4A5568 !important;margin:0 0 12px}
+#orbit-panel .op-action-card{background:rgba(255,255,255,0.8);border:1px solid rgba(76,175,80,0.15);border-radius:16px;padding:16px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 18px 40px rgba(0,0,0,.08)}
+#orbit-panel .op-action-card.risk{border-color:rgba(255,0,110,0.2);box-shadow:0 18px 40px rgba(0,0,0,.08),0 0 0 1px rgba(255,0,110,0.08)}
+#orbit-panel .op-action-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+#orbit-panel .op-action-author{font-size:18px;font-weight:600;color:#1B5E20 !important;line-height:1.2}
+#orbit-panel .op-action-meta{font-size:12px;color:#4A5568 !important;margin-top:4px}
+#orbit-panel .op-action-quote{font-size:15px;line-height:1.65;color:#1B5E20 !important;margin:0 0 14px}
+#orbit-panel .op-action-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+#orbit-panel .op-action-note{font-size:12px;color:#4A5568 !important}
+#orbit-panel .op-risk-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.04em}
+#orbit-panel .op-risk-chip.alert{background:rgba(255,0,110,0.08);color:#ff006e !important;border:1px solid rgba(255,0,110,0.15)}
+#orbit-panel .op-risk-chip.safe{background:rgba(0,245,212,0.08);color:#00c8b2 !important;border:1px solid rgba(0,245,212,0.12)}
+#orbit-panel .op-fix-btn{padding:11px 18px;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;color:#FFFFFF !important;background:linear-gradient(135deg,#00f5d4,#14b8a6);box-shadow:0 0 0 rgba(0,245,212,0);transition:all .2s ease}
+#orbit-panel .op-fix-btn:hover{transform:translateY(-1px);box-shadow:0 0 20px rgba(0,245,212,0.25)}
+#orbit-panel .op-queue{margin-top:12px;border-top:1px solid rgba(76,175,80,0.1);padding-top:12px}
+#orbit-panel .op-queue-item{padding:10px 0;border-bottom:1px solid rgba(76,175,80,0.08)}
+#orbit-panel .op-queue-item:last-child{border-bottom:none;padding-bottom:0}
+#orbit-panel .op-queue-line{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#orbit-panel .op-queue-author{font-size:13px;font-weight:600;color:#1B5E20 !important}
+#orbit-panel .op-queue-text{font-size:12px;color:#4A5568 !important;line-height:1.5;margin-top:4px}
+#orbit-panel .op-product-bar{display:flex;gap:6px;padding:8px 16px;background:rgba(255,255,255,0.5);border-bottom:1px solid rgba(76,175,80,0.1);overflow-x:auto;scrollbar-width:none}
+#orbit-panel .op-product-bar::-webkit-scrollbar{display:none}
+#orbit-panel .op-product-bar .ptab{padding:5px 12px;border-radius:16px;border:1px solid rgba(76,175,80,0.1);background:transparent;color:#4A5568 !important;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+#orbit-panel .op-product-bar .ptab.active{background:rgba(0,245,212,0.1);color:#00c8b2 !important;border-color:rgba(0,245,212,0.2)}
+#orbit-panel .op-product-bar .ptab:hover{color:#1B5E20 !important;border-color:rgba(0,245,212,0.15)}
+#orbit-panel .op-product-bar .ptab .pcount{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:8px;font-size:9px;font-weight:700;margin-left:4px;background:rgba(0,0,0,0.06);color:#4A5568 !important}
+#orbit-panel .op-product-bar .ptab.active .pcount{background:rgba(0,245,212,0.2);color:#00c8b2 !important}
 
-/* LIGHT MODE OVERRIDES */
-[data-theme="light"] #orbit-widget{background:linear-gradient(135deg,#0891b2,#7c3aed);box-shadow:0 8px 32px rgba(6,182,212,0.3)}
-[data-theme="light"] #orbit-widget:hover{box-shadow:0 12px 40px rgba(6,182,212,0.5)}
-[data-theme="light"] #orbit-widget .badge{background:#0d0d0d;color:#fff}
-[data-theme="light"] #orbit-panel{background:linear-gradient(180deg,rgba(248,250,252,0.98) 0%,rgba(241,245,248,0.99) 100%)}
-[data-theme="light"] .op-header{background:linear-gradient(180deg,rgba(6,182,212,0.05) 0%,transparent 100%)}
-[data-theme="light"] .op-header .title{color:#0f172a}
-[data-theme="light"] .op-header .close{color:#64748b;background:rgba(0,0,0,0.05)}
-[data-theme="light"] .op-header .close:hover{background:rgba(0,0,0,0.1);color:#0f172a}
-[data-theme="light"] .op-header .orbit-status .status-text{color:#0891b2;text-shadow:0 0 20px rgba(8,145,178,0.3)}
-[data-theme="light"] .op-header .orbit-status.alert .status-text{color:#dc2626}
-[data-theme="light"] .op-nav{background:rgba(0,0,0,0.03)}
-[data-theme="light"] .op-nav button{color:#64748b}
-[data-theme="light"] .op-nav button.active{color:#0f172a}
-[data-theme="light"] .op-body{background:transparent}
-[data-theme="light"] .op-footer{background:rgba(0,0,0,0.05);color:#64748b}
-[data-theme="light"] .op-card{background:linear-gradient(135deg,rgba(255,255,255,0.9) 0%,rgba(248,250,252,0.95) 100%);border-color:rgba(0,0,0,0.08)}
-[data-theme="light"] .op-card:hover{background:linear-gradient(135deg,rgba(255,255,255,1) 0%,rgba(255,255,255,0.98) 100%);box-shadow:0 12px 40px rgba(0,0,0,0.1)}
-[data-theme="light"] .op-product-bar{background:rgba(0,0,0,0.03)}
-[data-theme="light"] .op-product-bar .ptab{border-color:rgba(0,0,0,0.08);color:#64748b}
-[data-theme="light"] .op-product-bar .ptab.active{background:linear-gradient(135deg,#0891b2,#7c3aed);color:#fff}
-[data-theme="light"] .orbit-bar-mini{background:rgba(255,255,255,0.95);border-color:rgba(0,0,0,0.08);box-shadow:0 4px 12px rgba(0,0,0,0.08)}
-[data-theme="light"] .op-status-shell.calm .op-status-kicker{background:linear-gradient(90deg,#0891b2,#059669);-webkit-background-clip:text}
-[data-theme="light"] .op-status-shell.alert .op-status-kicker{background:linear-gradient(90deg,#f97316,#dc2626);-webkit-background-clip:text}
-[data-theme="light"] .op-status-title{color:#0f172a}
-[data-theme="light"] .op-status-copy{color:#475569}
-[data-theme="light"] .op-btn.primary{color:#fff}
-[data-theme="light"] .op-input{background:rgba(0,0,0,0.03);border-color:rgba(0,0,0,0.1);color:#0f172a}
-[data-theme="light"] .op-input:focus{border-color:#0891b2}
+/* THEME TOGGLE BUTTON */
+.op-theme-toggle{background:rgba(0,0,0,0.04);border:none;color:#4A5568 !important;font-size:16px;cursor:pointer;padding:8px;border-radius:8px;transition:all 0.3s ease;display:flex;align-items:center;justify-content:center;margin-right:8px;width:36px;height:36px}
+.op-theme-toggle:hover{background:rgba(0,0,0,0.08);color:#1B5E20 !important;transform:rotate(15deg)}
+
+/* THEME TRANSITION */
+#orbit-panel,#orbit-panel .op-header,#orbit-panel .op-nav,#orbit-panel .op-body,#orbit-panel .op-footer,#orbit-panel .op-card,#orbit-panel .op-banner,#orbit-panel .op-action-card,#orbit-panel .op-metric,#orbit-panel .op-lock,#orbit-panel .op-product-bar,#orbit-panel .orbit-bar-mini{transition:background 0.4s cubic-bezier(0.4,0,0.2,1),color 0.4s cubic-bezier(0.4,0,0.2,1),border-color 0.4s cubic-bezier(0.4,0,0.2,1),box-shadow 0.4s cubic-bezier(0.4,0,0.2,1) !important}
 `;
   document.head.appendChild(s);
 }
@@ -422,7 +445,7 @@ function createWidget() {
   try {
     const w = document.createElement('div'); w.id = 'orbit-widget';
     w.innerHTML = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.5)"/><circle cx="12" cy="12" r="4" fill="#fff"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="#fff" stroke-width="1.5" opacity="0.8"/></svg><div class="badge" style="display:none">0</div>';
-    w.style.cssText = 'position:fixed !important;bottom:28px !important;right:28px !important;z-index:9999999 !important;cursor:pointer !important;width:52px !important;height:52px !important;border-radius:16px !important;background:linear-gradient(135deg,#0891b2,#7c3aed) !important;display:flex !important;align-items:center !important;justify-content:center !important;box-shadow:0 8px 32px rgba(6,182,212,0.3),0 0 0 1px rgba(255,255,255,0.1) !important;transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;font-family:"Inter",system-ui,-apple-system,sans-serif !important';
+    w.style.cssText = 'position:fixed !important;bottom:28px !important;right:28px !important;z-index:9999999 !important;cursor:pointer !important;width:52px !important;height:52px !important;border-radius:16px !important;background:linear-gradient(135deg,#00f5d4,#7c3aed) !important;display:flex !important;align-items:center !important;justify-content:center !important;box-shadow:0 8px 32px rgba(6,182,212,0.3),0 0 0 1px rgba(255,255,255,0.1) !important;transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;font-family:"Inter",system-ui,-apple-system,sans-serif !important';
     w.onclick = function() { console.log('[ORBIT] Widget clicked!'); togglePanel(); };
     document.body.appendChild(w);
     console.log('[ORBIT] Floating button created with click handler');
@@ -474,8 +497,11 @@ if (!document.getElementById('risk-pulse-style')) {
 function createPanel() {
   if (document.getElementById('orbit-panel')) return;
   const p = document.createElement('div'); p.id = 'orbit-panel';
-  p.style.cssText = 'position:fixed !important;top:0 !important;right:0 !important;width:400px !important;height:100vh !important;background:rgba(13,13,13,0.85) !important;-webkit-backdrop-filter:blur(15px) !important;backdrop-filter:blur(15px) !important;border-left:1px solid rgba(255,255,255,0.08) !important;z-index:9999998 !important;display:flex !important;flex-direction:column !important;font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif !important;box-shadow:-8px 0 40px rgba(0,0,0,0.5) !important';
-  p.innerHTML = '<div class="op-header"><div class="orbit-status" id="orbit-status"><span class="status-icon">✅</span><span class="status-text">Protected</span></div><button class="close" id="orbit-close">x</button></div><div class="op-banner" id="orbit-banner"><span class="dot"></span><div><div style="font-weight:700">ORBIT Chrome Extension Active</div><div class="sub">AI reply assistant is running. Click "Reply" on any comment to see ORBIT in action.</div></div></div><div class="op-nav"><button data-view="layer0" class="active">Dashboard</button><button data-view="layer2">Report</button><button data-view="layer3">Settings</button></div><div class="op-product-bar" id="orbit-product-bar"></div><div class="op-body" id="orbit-body"></div><div class="op-footer"><span>Time: <span id="op-time">0m</span> saved</span><span>Risks: <span id="op-risks">0</span></span><span>Rate: <span id="op-rate">0</span>%</span></div>';
+  p.style.cssText = 'position:fixed !important;top:0 !important;right:0 !important;width:420px !important;min-width:340px !important;max-width:680px !important;height:100vh !important;background:rgba(232,245,233,0.98) !important;-webkit-backdrop-filter:blur(12px) !important;backdrop-filter:blur(12px) !important;border-left:1px solid rgba(76,175,80,0.2) !important;z-index:9999998 !important;display:flex !important;flex-direction:column !important;font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif !important;box-shadow:-8px 0 40px rgba(0,0,0,0.15) !important;resize:horizontal !important;overflow:hidden !important';
+  const banner = isSalesPage()
+    ? '<div class="op-banner" id="orbit-banner"><span class="dot"></span><div><div style="font-weight:700">ORBIT Chrome Extension Active</div><div class="sub">AI reply assistant is running. Click "Reply" on any comment to see ORBIT in action.</div></div></div>'
+    : '';
+  p.innerHTML = '<div class="op-header"><div class="orbit-status" id="orbit-status"><span class="status-icon">✅</span><span class="status-text">Protected</span></div><button class="op-theme-toggle" id="orbit-theme-toggle" title="Toggle theme"><svg class="theme-icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><svg class="theme-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button><button class="close" id="orbit-close">x</button></div>' + banner + '<div class="op-nav"><button data-view="layer0" class="active">Dashboard</button><button data-view="layer2">Report</button><button data-view="layer3">Settings</button></div><div class="op-product-bar" id="orbit-product-bar"></div><div class="op-body" id="orbit-body"></div><div class="op-footer"><span>Time: <span id="op-time">0m</span> saved</span><span>Risks: <span id="op-risks">0</span></span><span>Rate: <span id="op-rate">0</span>%</span></div>';
   document.body.appendChild(p);
   refreshPanelProductLabel();
   renderProductSwitcher();
@@ -486,6 +512,11 @@ function createPanel() {
     p.querySelectorAll('.op-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
     renderView();
   });
+  p.querySelector('#orbit-theme-toggle').addEventListener('click', () => toggleTheme());
+  p.addEventListener('mouseup', () => savePanelSize(p));
+  p.addEventListener('touchend', () => savePanelSize(p));
+  restorePanelSize(p);
+  applyThemeToDOM(currentTheme);
 }
 function renderProductSwitcher() {
   const bar = document.getElementById('orbit-product-bar');
@@ -546,7 +577,7 @@ function renderLayer0(body) {
   const queue = pending.filter(c => c !== focus).slice(0, 3);
 
   if (!focus) {
-    body.innerHTML = '<div class="op-status-shell calm"><div class="op-status-kicker">ORBIT</div><h2 class="op-status-title">You are safe</h2><p class="op-status-copy">No urgent comments. Everything is calm, controlled, and under watch.</p></div><div style="margin-top:22px;color:rgba(255,255,255,.34);font-size:12px">Replies complete: '+done.length+'/'+scopedComments.length+'</div><div style="margin-top:18px"><button class="op-btn ghost" onclick="document.querySelector(\'[data-view=layer2]\').click()">View Weekly Report</button></div>';
+    body.innerHTML = '<div class="op-status-shell calm"><div class="op-status-kicker">ORBIT</div><h2 class="op-status-title">You are safe</h2><p class="op-status-copy">No urgent comments. Everything is calm, controlled, and under watch.</p></div><div style="margin-top:22px;color:#4A5568;font-size:12px">Replies complete: '+done.length+'/'+scopedComments.length+'</div><div style="margin-top:18px"><button class="op-btn ghost" onclick="document.querySelector(\'[data-view=layer2]\').click()">View Weekly Report</button></div>';
     return;
   }
 
@@ -557,7 +588,30 @@ function renderLayer0(body) {
     ? urgent.length + ' customer' + (urgent.length > 1 ? 's may refund' : ' may refund')
     : pending.length + ' comment' + (pending.length > 1 ? 's are waiting for a reply' : ' is waiting for a reply');
 
-  body.innerHTML = '<div class="op-status-shell '+(urgent.length > 0 ? 'alert' : 'calm')+'"><div class="op-status-kicker">'+(urgent.length > 0 ? 'Action Required' : 'ORBIT')+'</div><h2 class="op-status-title">'+statusTitle+'</h2><p class="op-status-copy">'+statusCopy+'</p></div><div class="op-action-shell"><div class="op-section-label">Current Action</div><div class="op-action-card '+(focus.risk >= 50 ? 'risk' : '')+'" id="op-focus-card"><div class="op-action-top"><div><div class="op-action-author">'+esc(focus.author)+'</div><div class="op-action-meta">'+(focus.type === 'NEGATIVE' ? 'Potential refund risk' : focus.type.replace('_',' '))+' • Score '+focus.risk+'/100</div></div><span class="op-risk-chip '+(focus.risk >= 50 ? 'alert' : 'safe')+'">'+riskLabel+'</span></div><p class="op-action-quote">"'+esc(focus.text.substring(0, 180))+(focus.text.length > 180 ? '...' : '')+'"</p><div class="op-action-row"><div><div style="font-size:12px;color:rgba(255,255,255,.86);font-weight:600;margin-bottom:4px">Reply ready</div><div class="op-action-note">'+(focus.risk >= 50 ? 'This is the one comment to fix first.' : 'This comment is waiting for your response.')+'</div></div><button class="op-fix-btn" id="op-fix-now">Fix This Now</button></div>'+(queue.length ? '<div class="op-queue"><div class="op-section-label" style="margin-bottom:8px">Next In Queue</div>'+queue.map(item => '<div class="op-queue-item"><div class="op-queue-line"><span class="op-queue-author">'+esc(item.author)+'</span><span style="font-size:11px;color:'+(item.risk >= 50 ? '#fca5a5' : 'rgba(255,255,255,.36)')+'">'+item.risk+'/100</span></div><div class="op-queue-text">'+esc(item.text.substring(0, 88))+(item.text.length > 88 ? '...' : '')+'</div></div>').join('')+'</div>' : '')+'</div></div>'+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length > 1 ? '<div style="margin-top:14px"><button class="op-btn ghost" id="op-autofill" style="width:100%;justify-content:center">Auto-Fill Remaining '+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length - 1)+' comments</button></div>' : '');
+  body.innerHTML = '<div class="op-status-shell '+(urgent.length > 0 ? 'alert' : 'calm')+'"><div class="op-status-kicker">'+(urgent.length > 0 ? 'Action Required' : 'ORBIT')+'</div><h2 class="op-status-title">'+statusTitle+'</h2><p class="op-status-copy">'+statusCopy+'</p></div><div class="op-action-shell"><div class="op-section-label">Current Action</div><div class="op-action-card '+(focus.risk >= 50 ? 'risk' : '')+'" id="op-focus-card"><div class="op-action-top"><div><div class="op-action-author">'+esc(focus.author)+'</div><div class="op-action-meta">'+(focus.type === 'NEGATIVE' ? 'Potential refund risk' : focus.type.replace('_',' '))+' • Score '+focus.risk+'/100</div></div><span class="op-risk-chip '+(focus.risk >= 50 ? 'alert' : 'safe')+'">'+riskLabel+'</span></div><p class="op-action-quote">"'+esc(focus.text.substring(0, 180))+(focus.text.length > 180 ? '...' : '')+'"</p><div class="op-action-row"><div><div style="font-size:12px;color:#1B5E20;font-weight:600;margin-bottom:4px">Reply ready</div><div class="op-action-note">'+(focus.risk >= 50 ? 'This is the one comment to fix first.' : 'This comment is waiting for your response.')+'</div></div><button class="op-fix-btn" id="op-fix-now">Fix This Now</button></div>'+(queue.length ? '<div class="op-queue"><div class="op-section-label" style="margin-bottom:8px">Next In Queue</div>'+queue.map(item => '<div class="op-queue-item"><div class="op-queue-line"><span class="op-queue-author">'+esc(item.author)+'</span><span style="font-size:11px;color:'+(item.risk >= 50 ? '#4A5568' : '#4A5568')+'">'+item.risk+'/100</span></div><div class="op-queue-text">'+esc(item.text.substring(0, 88))+(item.text.length > 88 ? '...' : '')+'</div></div>').join('')+'</div>' : '')+'</div></div>'+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length > 1 ? '<div style="margin-top:14px"><button class="op-btn ghost" id="op-autofill" style="width:100%;justify-content:center">Auto-Fill Remaining '+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length - 1)+' comments</button></div>' : '');
+  
+  body.querySelector('#op-fix-now')?.addEventListener('click', () => {
+    orbitState.selectedIdx = focusIndex;
+    orbitState.view = 'layer1';
+    renderView();
+  });
+  body.querySelector('#op-focus-card')?.addEventListener('click', (e) => {
+    if (e.target.closest('#op-fix-now')) return;
+    orbitState.selectedIdx = focusIndex;
+    orbitState.view = 'layer1';
+    renderView();
+  });
+  body.querySelector('#op-autofill')?.addEventListener('click', () => bulkFill());
+}
+
+/*  const focusIndex = orbitComments.indexOf(focus);
+  const riskLabel = focus.risk >= 50 ? 'High Risk' : 'Reply Ready';
+  const statusTitle = urgent.length > 0 ? 'Action required' : 'Everything is under control';
+  const statusCopy = urgent.length > 0
+    ? urgent.length + ' customer' + (urgent.length > 1 ? 's may refund' : ' may refund')
+    : pending.length + ' comment' + (pending.length > 1 ? 's are waiting for a reply' : ' is waiting for a reply');
+
+  body.innerHTML = '<div class="op-status-shell '+(urgent.length > 0 ? 'alert' : 'calm')+'"><div class="op-status-kicker">'+(urgent.length > 0 ? 'Action Required' : 'ORBIT')+'</div><h2 class="op-status-title">'+statusTitle+'</h2><p class="op-status-copy">'+statusCopy+'</p></div><div class="op-action-shell"><div class="op-section-label">Current Action</div><div class="op-action-card '+(focus.risk >= 50 ? 'risk' : '')+'" id="op-focus-card"><div class="op-action-top"><div><div class="op-action-author">'+esc(focus.author)+'</div><div class="op-action-meta">'+(focus.type === 'NEGATIVE' ? 'Potential refund risk' : focus.type.replace('_',' '))+' • Score '+focus.risk+'/100</div></div><span class="op-risk-chip '+(focus.risk >= 50 ? 'alert' : 'safe')+'">'+riskLabel+'</span></div><p class="op-action-quote">"'+esc(focus.text.substring(0, 180))+(focus.text.length > 180 ? '...' : '')+'"</p><div class="op-action-row"><div><div style="font-size:12px;color:#1B5E20;font-weight:600;margin-bottom:4px">Reply ready</div><div class="op-action-note">'+(focus.risk >= 50 ? 'This is the one comment to fix first.' : 'This comment is waiting for your response.')+'</div></div><button class="op-fix-btn" id="op-fix-now">Fix This Now</button></div>'+(queue.length ? '<div class="op-queue"><div class="op-section-label" style="margin-bottom:8px">Next In Queue</div>'+queue.map(item => '<div class="op-queue-item"><div class="op-queue-line"><span class="op-queue-author">'+esc(item.author)+'</span><span style="font-size:11px;color:'+(item.risk >= 50 ? '#4A5568' : '#4A5568')+'">'+item.risk+'/100</span></div><div class="op-queue-text">'+esc(item.text.substring(0, 88))+(item.text.length > 88 ? '...' : '')+'</div></div>').join('')+'</div>' : '')+'</div>'+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length > 1 ? '<div style="margin-top:14px"><button class="op-btn ghost" id="op-autofill" style="width:100%;justify-content:center">Auto-Fill Remaining '+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length - 1)+' comments</button></div>' : '');
   
   body.querySelector('#op-fix-now')?.addEventListener('click', () => {
     orbitState.selectedIdx = focusIndex;
@@ -580,30 +634,7 @@ function renderLayer0(body) {
     ? urgent.length + ' customer' + (urgent.length > 1 ? 's may refund' : ' may refund')
     : pending.length + ' comment' + (pending.length > 1 ? 's are waiting for a reply' : ' is waiting for a reply');
 
-  body.innerHTML = '<div class="op-status-shell '+(urgent.length > 0 ? 'alert' : 'calm')+'"><div class="op-status-kicker">'+(urgent.length > 0 ? 'Action Required' : 'ORBIT')+'</div><h2 class="op-status-title">'+statusTitle+'</h2><p class="op-status-copy">'+statusCopy+'</p></div><div class="op-action-shell"><div class="op-section-label">Current Action</div><div class="op-action-card '+(focus.risk >= 50 ? 'risk' : '')+'" id="op-focus-card"><div class="op-action-top"><div><div class="op-action-author">'+esc(focus.author)+'</div><div class="op-action-meta">'+(focus.type === 'NEGATIVE' ? 'Potential refund risk' : focus.type.replace('_',' '))+' • Score '+focus.risk+'/100</div></div><span class="op-risk-chip '+(focus.risk >= 50 ? 'alert' : 'safe')+'">'+riskLabel+'</span></div><p class="op-action-quote">"'+esc(focus.text.substring(0, 180))+(focus.text.length > 180 ? '...' : '')+'"</p><div class="op-action-row"><div><div style="font-size:12px;color:rgba(255,255,255,.86);font-weight:600;margin-bottom:4px">Reply ready</div><div class="op-action-note">'+(focus.risk >= 50 ? 'This is the one comment to fix first.' : 'This comment is waiting for your response.')+'</div></div><button class="op-fix-btn" id="op-fix-now">Fix This Now</button></div>'+(queue.length ? '<div class="op-queue"><div class="op-section-label" style="margin-bottom:8px">Next In Queue</div>'+queue.map(item => '<div class="op-queue-item"><div class="op-queue-line"><span class="op-queue-author">'+esc(item.author)+'</span><span style="font-size:11px;color:'+(item.risk >= 50 ? '#fca5a5' : 'rgba(255,255,255,.36)')+'">'+item.risk+'/100</span></div><div class="op-queue-text">'+esc(item.text.substring(0, 88))+(item.text.length > 88 ? '...' : '')+'</div></div>').join('')+'</div>' : '')+'</div>'+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length > 1 ? '<div style="margin-top:14px"><button class="op-btn ghost" id="op-autofill" style="width:100%;justify-content:center">Auto-Fill Remaining '+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length - 1)+' comments</button></div>' : '');
-  
-  body.querySelector('#op-fix-now')?.addEventListener('click', () => {
-    orbitState.selectedIdx = focusIndex;
-    orbitState.view = 'layer1';
-    renderView();
-  });
-  body.querySelector('#op-focus-card')?.addEventListener('click', (e) => {
-    if (e.target.closest('#op-fix-now')) return;
-    orbitState.selectedIdx = focusIndex;
-    orbitState.view = 'layer1';
-    renderView();
-  });
-  body.querySelector('#op-autofill')?.addEventListener('click', () => bulkFill());
-}
-
-  const focusIndex = orbitComments.indexOf(focus);
-  const riskLabel = focus.risk >= 50 ? 'High Risk' : 'Reply Ready';
-  const statusTitle = urgent.length > 0 ? 'Action required' : 'Everything is under control';
-  const statusCopy = urgent.length > 0
-    ? urgent.length + ' customer' + (urgent.length > 1 ? 's may refund' : ' may refund')
-    : pending.length + ' comment' + (pending.length > 1 ? 's are waiting for a reply' : ' is waiting for a reply');
-
-  body.innerHTML = '<div class="op-status-shell '+(urgent.length > 0 ? 'alert' : 'calm')+'"><div class="op-status-kicker">'+(urgent.length > 0 ? 'Action Required' : 'ORBIT')+'</div><h2 class="op-status-title">'+statusTitle+'</h2><p class="op-status-copy">'+statusCopy+'</p></div><div class="op-action-shell"><div class="op-section-label">Current Action</div><div class="op-action-card '+(focus.risk >= 50 ? 'risk' : '')+'" id="op-focus-card"><div class="op-action-top"><div><div class="op-action-author">'+esc(focus.author)+'</div><div class="op-action-meta">'+(focus.type === 'NEGATIVE' ? 'Potential refund risk' : focus.type.replace('_',' '))+' • Score '+focus.risk+'/100</div></div><span class="op-risk-chip '+(focus.risk >= 50 ? 'alert' : 'safe')+'">'+riskLabel+'</span></div><p class="op-action-quote">"'+esc(focus.text.substring(0, 180))+(focus.text.length > 180 ? '...' : '')+'"</p><div class="op-action-row"><div><div style="font-size:12px;color:rgba(255,255,255,.86);font-weight:600;margin-bottom:4px">Reply ready</div><div class="op-action-note">'+(focus.risk >= 50 ? 'This is the one comment to fix first.' : 'This comment is waiting for your response.')+'</div></div><button class="op-fix-btn" id="op-fix-now">Fix This Now</button></div>'+(queue.length ? '<div class="op-queue"><div class="op-section-label" style="margin-bottom:8px">Next In Queue</div>'+queue.map(item => '<div class="op-queue-item"><div class="op-queue-line"><span class="op-queue-author">'+esc(item.author)+'</span><span style="font-size:11px;color:'+(item.risk >= 50 ? '#fca5a5' : 'rgba(255,255,255,.36)')+'">'+item.risk+'/100</span></div><div class="op-queue-text">'+esc(item.text.substring(0, 88))+(item.text.length > 88 ? '...' : '')+'</div></div>').join('')+'</div>' : '')+'</div></div>'+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length > 1 ? '<div style="margin-top:14px"><button class="op-btn ghost" id="op-autofill" style="width:100%;justify-content:center">Auto-Fill Remaining '+(pending.length - 1)+'</button></div>' : '');
+  body.innerHTML = '<div class="op-status-shell '+(urgent.length > 0 ? 'alert' : 'calm')+'"><div class="op-status-kicker">'+(urgent.length > 0 ? 'Action Required' : 'ORBIT')+'</div><h2 class="op-status-title">'+statusTitle+'</h2><p class="op-status-copy">'+statusCopy+'</p></div><div class="op-action-shell"><div class="op-section-label">Current Action</div><div class="op-action-card '+(focus.risk >= 50 ? 'risk' : '')+'" id="op-focus-card"><div class="op-action-top"><div><div class="op-action-author">'+esc(focus.author)+'</div><div class="op-action-meta">'+(focus.type === 'NEGATIVE' ? 'Potential refund risk' : focus.type.replace('_',' '))+' • Score '+focus.risk+'/100</div></div><span class="op-risk-chip '+(focus.risk >= 50 ? 'alert' : 'safe')+'">'+riskLabel+'</span></div><p class="op-action-quote">"'+esc(focus.text.substring(0, 180))+(focus.text.length > 180 ? '...' : '')+'"</p><div class="op-action-row"><div><div style="font-size:12px;color:#1B5E20;font-weight:600;margin-bottom:4px">Reply ready</div><div class="op-action-note">'+(focus.risk >= 50 ? 'This is the one comment to fix first.' : 'This comment is waiting for your response.')+'</div></div><button class="op-fix-btn" id="op-fix-now">Fix This Now</button></div>'+(queue.length ? '<div class="op-queue"><div class="op-section-label" style="margin-bottom:8px">Next In Queue</div>'+queue.map(item => '<div class="op-queue-item"><div class="op-queue-line"><span class="op-queue-author">'+esc(item.author)+'</span><span style="font-size:11px;color:'+(item.risk >= 50 ? '#4A5568' : '#4A5568')+'">'+item.risk+'/100</span></div><div class="op-queue-text">'+esc(item.text.substring(0, 88))+(item.text.length > 88 ? '...' : '')+'</div></div>').join('')+'</div>' : '')+'</div></div>'+(pending.length > 1 && pending.filter(c => c.type !== 'NON_ENGLISH').length > 1 ? '<div style="margin-top:14px"><button class="op-btn ghost" id="op-autofill" style="width:100%;justify-content:center">Auto-Fill Remaining '+(pending.length - 1)+'</button></div>' : '');
 
   body.querySelector('#op-fix-now')?.addEventListener('click', () => {
     orbitState.selectedIdx = focusIndex;
@@ -619,12 +650,13 @@ function renderLayer0(body) {
   body.querySelector('#op-autofill')?.addEventListener('click', () => bulkFill());
 }
 
+*/
 // Layer 1: Comment Detail
 function renderLayer1(body) {
   const c=orbitComments[orbitState.selectedIdx]; if(!c){orbitState.view='layer0';renderView();return;}
   const riskBreakdown=[]; const l=c.text.toLowerCase();
   if(l.includes('refund'))riskBreakdown.push({kw:'refund',pts:40}); if(l.includes('cancel'))riskBreakdown.push({kw:'cancel',pts:30}); if(l.includes('disappointed'))riskBreakdown.push({kw:'disappointed',pts:20}); if(l.includes('not working'))riskBreakdown.push({kw:'not working',pts:25});
-  body.innerHTML='<div style="margin-bottom:16px"><button class="op-btn ghost" id="op-back" style="padding:4px 10px;font-size:12px">Back</button></div><div class="op-status-shell '+(c.risk >= 50 ? 'alert' : 'calm')+'" style="padding-top:0"><div class="op-status-kicker">'+(c.risk >= 50 ? 'Action Required' : 'Reply Opportunity')+'</div><h2 class="op-status-title" style="font-size:24px;margin-bottom:6px">'+esc(c.author)+'</h2><p class="op-status-copy">'+(c.risk >= 50 ? 'This customer needs immediate attention before the issue escalates.' : 'A clear, calm response is ready for this comment.')+'</p></div>'+(c.risk>0?'<div class="op-card" style="border-left:3px solid '+(c.risk>=50?'#ef4444':'#f59e0b')+'"><div style="font-size:12px;font-weight:700;color:'+(c.risk>=50?'#fca5a5':'#fcd34d')+';margin-bottom:6px">REFUND RISK SCORE</div><div class="op-risk-bar"><div class="fill" style="width:'+c.risk+'%;background:'+(c.risk>=50?'#ef4444':'#f59e0b')+'"></div></div><div style="font-size:20px;font-weight:800;color:'+(c.risk>=50?'#ef4444':'#f59e0b')+'">'+c.risk+'/100</div>'+riskBreakdown.map(r=>'<span style="color:'+(c.risk>=50?'#fca5a5':'#fcd34d')+';font-size:11px;margin-right:8px">"'+r.kw+'" +'+r.pts+'</span>').join('')+'</div>':'')+'<div class="op-card"><div style="font-size:11px;color:#6b7280;margin-bottom:6px">COMMENT</div><p style="color:#e2e8f0;font-size:14px;margin:0;line-height:1.6">'+esc(c.text)+'</p></div><div class="op-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:11px;color:#6b7280">FREE REPLY</span><div class="op-tabs" style="margin:0" id="op-tone-tabs"><button data-tone="professional" class="'+((cachedSettings.defaultTone||'professional')==='professional'?'active':'')+'">Professional</button><button data-tone="friendly" class="'+(cachedSettings.defaultTone==='friendly'?'active':'')+'">Friendly</button><button data-tone="empathetic" class="'+(cachedSettings.defaultTone==='empathetic'?'active':'')+'">Empathetic</button></div></div><textarea id="op-reply-text" class="op-input" rows="5" style="resize:vertical;font-family:inherit">'+esc(c.replyText||'')+'</textarea><div style="display:flex;gap:6px;margin-top:10px"><button class="op-btn ghost" id="op-regen">Regenerate</button><button class="op-btn primary" id="op-approve" style="flex:1;justify-content:center">Fix This Now</button></div></div><div class="op-lock"><div style="font-size:13px;font-weight:700;color:#a78bfa">AI REPLY - Pro Only</div><p>Context-aware reply using your product knowledge base</p><button class="op-btn ghost" id="op-unlock" style="margin-top:8px">Unlock AI Reply</button></div><div style="display:flex;gap:8px;margin-top:12px;justify-content:center"><span style="color:#6b7280;font-size:12px">Good reply?</span><button class="op-btn ghost" id="op-fb-yes" style="padding:4px 10px;font-size:11px">Yes</button><button class="op-btn ghost" id="op-fb-no" style="padding:4px 10px;font-size:11px">No</button></div>';
+  body.innerHTML='<div style="margin-bottom:16px"><button class="op-btn ghost" id="op-back" style="padding:4px 10px;font-size:12px">Back</button></div><div class="op-status-shell '+(c.risk >= 50 ? 'alert' : 'calm')+'" style="padding-top:0"><div class="op-status-kicker">'+(c.risk >= 50 ? 'Action Required' : 'Reply Opportunity')+'</div><h2 class="op-status-title" style="font-size:24px;margin-bottom:6px">'+esc(c.author)+'</h2><p class="op-status-copy">'+(c.risk >= 50 ? 'This customer needs immediate attention before the issue escalates.' : 'A clear, calm response is ready for this comment.')+'</p></div>'+(c.risk>0?'<div class="op-card" style="border-left:3px solid '+(c.risk>=50?'#ef4444':'#f59e0b')+'"><div style="font-size:12px;font-weight:700;color:'+(c.risk>=50?'#4A5568':'#4A5568')+';margin-bottom:6px">REFUND RISK SCORE</div><div class="op-risk-bar"><div class="fill" style="width:'+c.risk+'%;background:'+(c.risk>=50?'#ef4444':'#f59e0b')+'"></div></div><div style="font-size:20px;font-weight:800;color:'+(c.risk>=50?'#ef4444':'#f59e0b')+'">'+c.risk+'/100</div>'+riskBreakdown.map(r=>'<span style="color:'+(c.risk>=50?'#4A5568':'#4A5568')+';font-size:11px;margin-right:8px">"'+r.kw+'" +'+r.pts+'</span>').join('')+'</div>':'')+'<div class="op-card"><div style="font-size:11px;color:#4A5568;margin-bottom:6px">COMMENT</div><p style="color:#1B5E20;font-size:14px;margin:0;line-height:1.6">'+esc(c.text)+'</p></div><div class="op-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:11px;color:#4A5568">FREE REPLY</span><div class="op-tabs" style="margin:0" id="op-tone-tabs"><button data-tone="professional" class="'+((cachedSettings.defaultTone||'professional')==='professional'?'active':'')+'">Professional</button><button data-tone="friendly" class="'+(cachedSettings.defaultTone==='friendly'?'active':'')+'">Friendly</button><button data-tone="empathetic" class="'+(cachedSettings.defaultTone==='empathetic'?'active':'')+'">Empathetic</button></div></div><textarea id="op-reply-text" class="op-input" rows="5" style="resize:vertical;font-family:inherit">'+esc(c.replyText||'')+'</textarea><div style="display:flex;gap:6px;margin-top:10px"><button class="op-btn ghost" id="op-regen">Regenerate</button><button class="op-btn primary" id="op-approve" style="flex:1;justify-content:center">Fix This Now</button></div></div><div class="op-lock"><div style="font-size:13px;font-weight:700;color:#a78bfa">AI REPLY - Pro Only</div><p>Context-aware reply using your product knowledge base</p><button class="op-btn ghost" id="op-unlock" style="margin-top:8px">Unlock AI Reply</button></div><div style="display:flex;gap:8px;margin-top:12px;justify-content:center"><span style="color:#4A5568;font-size:12px">Good reply?</span><button class="op-btn ghost" id="op-fb-yes" style="padding:4px 10px;font-size:11px">Yes</button><button class="op-btn ghost" id="op-fb-no" style="padding:4px 10px;font-size:11px">No</button></div>';
   body.querySelector('#op-back').addEventListener('click',()=>{orbitState.view='layer0';renderView();});
   body.querySelector('#op-unlock')?.addEventListener('click',()=>{orbitState.view='layer4';renderView();});
   if(!c.replyText) generateFreeReply(c).then(r=>{c.replyText=r;const ta=document.getElementById('op-reply-text');if(ta) ta.value=r;});
@@ -660,14 +692,14 @@ function renderLayer2(body) {
     
     body.innerHTML = `
       <div style="text-align: center; margin-bottom: 24px;">
-        <div style="font-size: 14px; color: #9ca3af; margin-bottom: 8px">Refund Risk Score</div>
+        <div style="font-size: 14px; color: #4A5568; margin-bottom: 8px">Refund Risk Score</div>
         <div style="font-size: 48px; font-weight: 800; background: linear-gradient(135deg, #ef4444, #f97316); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
           ${refundRiskScore}/100
         </div>
         <div style="margin-top: 12px; padding: 0 16px;">
           ${refundRiskScore >= 90 
-            ? '<div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 12px;"><div style="color: #f87171; font-weight: 600;">Action Required</div><div style="color: #9ca3af; font-size: 13px; margin-top: 4px;">High probability of refund requests detected</div></div>'
-            : '<div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; padding: 12px;"><div style="color: #10b981; font-weight: 600;">Low Risk</div><div style="color: #9ca3af; font-size: 13px; margin-top: 4px;">Minimal refund risk detected</div></div>'
+            ? '<div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 12px;"><div style="color: #ff006e; font-weight: 600;">Action Required</div><div style="color: #4A5568; font-size: 13px; margin-top: 4px;">High probability of refund requests detected</div></div>'
+            : '<div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; padding: 12px;"><div style="color: #10b981; font-weight: 600;">Low Risk</div><div style="color: #4A5568; font-size: 13px; margin-top: 4px;">Minimal refund risk detected</div></div>'
           }
         </div>
       </div>
@@ -676,21 +708,21 @@ function renderLayer2(body) {
         ? `<div class="op-card" style="border-left: 3px solid #ef4444; background: rgba(239, 68, 68, 0.05);">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
               <div>
-                <div style="font-size: 13px; font-weight: 600; color: #f8fafc;">Angry Customer</div>
-                <div style="font-size: 11px; color: #9ca3af; margin-top: 2px;">${angryCustomerComment.product || 'Product'}</div>
+                <div style="font-size: 13px; font-weight: 600; color: #1B5E20;">Angry Customer</div>
+                <div style="font-size: 11px; color: #4A5568; margin-top: 2px;">${angryCustomerComment.product || 'Product'}</div>
               </div>
               <div style="background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 4px 10px; border-radius: 6px; font-weight: 600; font-size: 12px;">
                 ${angryCustomerComment.risk}/100 Risk
               </div>
             </div>
-            <p style="color: #e2e8f0; font-size: 14px; line-height: 1.6; margin-bottom: 12px;">
+            <p style="color: #1B5E20; font-size: 14px; line-height: 1.6; margin-bottom: 12px;">
               "${angryCustomerComment.text.length > 200 ? angryCustomerComment.text.substring(0, 200) + '...' : angryCustomerComment.text}"
             </p>
             <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-              <span style="background: rgba(239, 68, 68, 0.1); color: #fca5a5; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+              <span style="background: rgba(239, 68, 68, 0.1); color: #4A5568; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
                 Refund Risk
               </span>
-              <span style="background: rgba(239, 68, 68, 0.1); color: #fca5a5; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+              <span style="background: rgba(239, 68, 68, 0.1); color: #4A5568; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
                 Negative Sentiment
               </span>
               <button class="op-btn ghost" style="font-size: 12px; padding: 6px 12px;" onclick="orbitState.selectedIdx = orbitComments.findIndex(c => c.hash === '${angryCustomerComment.hash}'); orbitState.view = 'layer1'; renderView();">
@@ -724,22 +756,22 @@ function renderLayer3(body) {
     const currentRisks=orbitComments.filter(c=>c.risk>=50).length;
     const currentReplied=orbitComments.filter(c=>c.replied).length;
     const isAlreadySaved=savedProducts.some(p=>p.url===location.href||p.name===previewName);
-    const platformColors={appsumo:'#4f46e5',gumroad:'#f472b6',lemonsqueezy:'#fbbf24',universal:'#6b7280'};
-    const platformColor=platformColors[adapterInfo.id]||'#6b7280';
+    const platformColors={appsumo:'#4f46e5',gumroad:'#f472b6',lemonsqueezy:'#fbbf24',universal:'#4A5568'};
+    const platformColor=platformColors[adapterInfo.id]||'#4A5568';
 
     // --- PRODUCT CONTEXT CARD ---
     let html='<h3 style="color:#fff;margin:0 0 16px;font-size:16px">Settings</h3>';
     html+='<div class="op-card" style="border:1px solid '+(isAlreadySaved?'rgba(45,212,191,.2)':'rgba(124,58,237,.15)')+';overflow:hidden">';
-    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="font-size:12px;font-weight:700;color:#9ca3af;letter-spacing:.1em">PRODUCT CONTEXT</div><span style="padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;letter-spacing:.05em;background:'+platformColor+';color:#fff;text-transform:uppercase">'+esc(adapterInfo.id)+'</span></div>';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="font-size:12px;font-weight:700;color:#4A5568;letter-spacing:.1em">PRODUCT CONTEXT</div><span style="padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;letter-spacing:.05em;background:'+platformColor+';color:#fff;text-transform:uppercase">'+esc(adapterInfo.id)+'</span></div>';
     html+='<div style="padding:14px 16px;border-radius:14px;background:linear-gradient(135deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border:1px solid rgba(255,255,255,.06);margin-bottom:14px">';
-    html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,'+platformColor+',rgba(124,58,237,.6));display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4M4 7l8 4M4 7v10l8 4m0-10v10"/></svg></div><div style="min-width:0"><div style="color:#f8fafc;font-size:15px;font-weight:700;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(previewName)+'</div><div style="color:#5eead4;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">'+esc(location.hostname)+'</div></div></div>';
+    html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,'+platformColor+',rgba(124,58,237,.6));display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4M4 7l8 4M4 7v10l8 4m0-10v10"/></svg></div><div style="min-width:0"><div style="color:#1B5E20;font-size:15px;font-weight:700;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(previewName)+'</div><div style="color:#00f5d4;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">'+esc(location.hostname)+'</div></div></div>';
     html+='<div style="color:#8b92a8;font-size:12px;line-height:1.65;margin-bottom:10px">'+esc(previewDesc)+'</div>';
-    html+='<div style="display:flex;gap:8px"><div style="flex:1;text-align:center;padding:8px 4px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid rgba(255,255,255,.04)"><div style="font-size:16px;font-weight:800;color:#a78bfa">'+currentComments+'</div><div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Comments</div></div><div style="flex:1;text-align:center;padding:8px 4px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid rgba(255,255,255,.04)"><div style="font-size:16px;font-weight:800;color:'+(currentRisks>0?'#ef4444':'#10b981')+'">'+currentRisks+'</div><div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Risks</div></div><div style="flex:1;text-align:center;padding:8px 4px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid rgba(255,255,255,.04)"><div style="font-size:16px;font-weight:800;color:#10b981">'+currentReplied+'</div><div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Replied</div></div></div></div>';
+    html+='<div style="display:flex;gap:8px"><div style="flex:1;text-align:center;padding:8px 4px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid rgba(255,255,255,.04)"><div style="font-size:16px;font-weight:800;color:#a78bfa">'+currentComments+'</div><div style="font-size:9px;color:#4A5568;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Comments</div></div><div style="flex:1;text-align:center;padding:8px 4px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid rgba(255,255,255,.04)"><div style="font-size:16px;font-weight:800;color:'+(currentRisks>0?'#ef4444':'#10b981')+'">'+currentRisks+'</div><div style="font-size:9px;color:#4A5568;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Risks</div></div><div style="flex:1;text-align:center;padding:8px 4px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid rgba(255,255,255,.04)"><div style="font-size:16px;font-weight:800;color:#10b981">'+currentReplied+'</div><div style="font-size:9px;color:#4A5568;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Replied</div></div></div></div>';
     html+='<button class="op-btn primary" id="op-save-current-product" style="width:100%;justify-content:center;padding:12px;font-size:14px;border-radius:12px">'+(isAlreadySaved?'Update Product':'Add This Product')+'</button>';
-    html+='<div id="op-product-status" style="margin-top:8px;color:#6b7280;font-size:11px;text-align:center">'+(isAlreadySaved?'This product is already saved. Click to update its data.':'Saves product name, description, URL, and '+currentComments+' comments to All Products.')+'</div></div>';
+    html+='<div id="op-product-status" style="margin-top:8px;color:#4A5568;font-size:11px;text-align:center">'+(isAlreadySaved?'This product is already saved. Click to update its data.':'Saves product name, description, URL, and '+currentComments+' comments to All Products.')+'</div></div>';
 
     // --- SAVED PRODUCTS LIST ---
-    html+='<div class="op-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="font-size:12px;font-weight:700;color:#9ca3af;letter-spacing:.1em">SAVED PRODUCTS</div><span style="color:#6b7280;font-size:11px">'+savedProducts.length+' product'+(savedProducts.length!==1?'s':'')+'</span></div>';
+    html+='<div class="op-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="font-size:12px;font-weight:700;color:#4A5568;letter-spacing:.1em">SAVED PRODUCTS</div><span style="color:#4A5568;font-size:11px">'+savedProducts.length+' product'+(savedProducts.length!==1?'s':'')+'</span></div>';
     if(savedProducts.length===0){
       html+='<div style="text-align:center;padding:20px 10px"><div style="color:#4b5563;font-size:12px;line-height:1.6">No products saved yet.<br>Visit a product page and click Add This Product.</div></div>';
     } else {
@@ -748,12 +780,12 @@ function renderLayer3(body) {
         const prodRisks=prodComments.filter(c=>c.flagged||c.risk>=50).length;
         const prodReplied=prodComments.filter(c=>c.resolved).length;
         const pendingCount=prodComments.length-prodReplied;
-        const pColor=platformColors[prod.source]||'#6b7280';
+        const pColor=platformColors[prod.source]||'#4A5568';
         html+='<div style="padding:12px;border-radius:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);margin-bottom:8px;transition:all .2s" class="op-saved-product" data-idx="'+idx+'">';
         html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
-        html+='<div style="display:flex;align-items:center;gap:8px;min-width:0"><div style="width:8px;height:8px;border-radius:50%;background:'+pColor+';flex-shrink:0"></div><div style="color:#e2e8f0;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(prod.name.length>24?prod.name.substring(0,24)+'...':prod.name)+'</div></div>';
+        html+='<div style="display:flex;align-items:center;gap:8px;min-width:0"><div style="width:8px;height:8px;border-radius:50%;background:'+pColor+';flex-shrink:0"></div><div style="color:#1B5E20;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(prod.name.length>24?prod.name.substring(0,24)+'...':prod.name)+'</div></div>';
         html+='<button class="op-remove-product" data-idx="'+idx+'" style="background:none;border:none;color:#4b5563;font-size:16px;cursor:pointer;padding:0 4px;transition:color .2s" title="Remove product">x</button></div>';
-        html+='<div style="display:flex;gap:12px;margin-top:4px"><span style="font-size:10px;color:#6b7280">'+prodComments.length+' comments</span><span style="font-size:10px;color:'+(prodRisks>0?'#fca5a5':'#6b7280')+'">'+prodRisks+' risk'+(prodRisks!==1?'s':'')+'</span><span style="font-size:10px;color:'+(pendingCount>0?'#93c5fd':'#6b7280')+'">'+pendingCount+' pending</span><span style="font-size:10px;color:#5eead4">'+prodReplied+' replied</span></div>';
+        html+='<div style="display:flex;gap:12px;margin-top:4px"><span style="font-size:10px;color:#4A5568">'+prodComments.length+' comments</span><span style="font-size:10px;color:'+(prodRisks>0?'#4A5568':'#4A5568')+'">'+prodRisks+' risk'+(prodRisks!==1?'s':'')+'</span><span style="font-size:10px;color:'+(pendingCount>0?'#4A5568':'#4A5568')+'">'+pendingCount+' pending</span><span style="font-size:10px;color:#00f5d4">'+prodReplied+' replied</span></div>';
         if(prod.url){html+='<div style="font-size:10px;color:#4b5563;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(prod.url)+'</div>';}
         html+='</div>';
       });
@@ -761,19 +793,19 @@ function renderLayer3(body) {
     html+='</div>';
 
     // --- ALERTS ---
-    html+='<div class="op-card"><div style="font-size:12px;font-weight:700;color:#9ca3af;margin-bottom:10px;letter-spacing:.1em">ALERTS - Free</div><label style="display:flex;justify-content:space-between;align-items:center;color:#d1d5db;font-size:13px;margin-bottom:10px"><span>Email on Refund Risk</span><input type="checkbox" id="op-s-email-notif" '+(s.emailNotifications?'checked':'')+' style="accent-color:#7c3aed"></label><label style="display:flex;justify-content:space-between;align-items:center;color:#d1d5db;font-size:13px"><span>Slack Webhook</span><input type="checkbox" id="op-s-webhook" '+(s.webhookEnabled?'checked':'')+' style="accent-color:#7c3aed"></label><input class="op-input" id="op-s-webhook-url" placeholder="Webhook URL" value="'+esc(s.webhookUrl||'')+'" style="margin-top:8px;display:'+(s.webhookEnabled?'block':'none')+'"></div>';
+    html+='<div class="op-card"><div style="font-size:12px;font-weight:700;color:#4A5568;margin-bottom:10px;letter-spacing:.1em">ALERTS - Free</div><label style="display:flex;justify-content:space-between;align-items:center;color:#4A5568;font-size:13px;margin-bottom:10px"><span>Email on Refund Risk</span><input type="checkbox" id="op-s-email-notif" '+(s.emailNotifications?'checked':'')+' style="accent-color:#7c3aed"></label><label style="display:flex;justify-content:space-between;align-items:center;color:#4A5568;font-size:13px"><span>Slack Webhook</span><input type="checkbox" id="op-s-webhook" '+(s.webhookEnabled?'checked':'')+' style="accent-color:#7c3aed"></label><input class="op-input" id="op-s-webhook-url" placeholder="Webhook URL" value="'+esc(s.webhookUrl||'')+'" style="margin-top:8px;display:'+(s.webhookEnabled?'block':'none')+'"></div>';
 
     // --- REPLY STYLE ---
-    html+='<div class="op-card"><div style="font-size:12px;font-weight:700;color:#9ca3af;margin-bottom:10px;letter-spacing:.1em">REPLY STYLE - Free</div><div style="display:flex;gap:6px;margin-bottom:10px">'+['professional','friendly','empathetic'].map(t=>'<button class="op-btn '+((s.defaultTone||'professional')===t?'primary':'ghost')+'" data-tone="'+t+'" style="flex:1;font-size:11px;padding:6px">'+t.charAt(0).toUpperCase()+t.slice(1)+'</button>').join('')+'</div><div style="display:flex;align-items:center;gap:8px"><span style="color:#6b7280;font-size:12px">Signature:</span><span style="color:#9ca3af;font-size:12px">Powered by ORBIT</span></div></div>';
+    html+='<div class="op-card"><div style="font-size:12px;font-weight:700;color:#4A5568;margin-bottom:10px;letter-spacing:.1em">REPLY STYLE - Free</div><div style="display:flex;gap:6px;margin-bottom:10px">'+['professional','friendly','empathetic'].map(t=>'<button class="op-btn '+((s.defaultTone||'professional')===t?'primary':'ghost')+'" data-tone="'+t+'" style="flex:1;font-size:11px;padding:6px">'+t.charAt(0).toUpperCase()+t.slice(1)+'</button>').join('')+'</div><div style="display:flex;align-items:center;gap:8px"><span style="color:#4A5568;font-size:12px">Signature:</span><span style="color:#4A5568;font-size:12px">Powered by ORBIT</span></div></div>';
 
     // --- PRIVACY ---
-    html+='<div class="op-card"><div style="font-size:12px;font-weight:700;color:#9ca3af;margin-bottom:10px;letter-spacing:.1em">PRIVACY - Free</div><label style="display:flex;justify-content:space-between;align-items:center;color:#d1d5db;font-size:13px;margin-bottom:10px"><span>Privacy Mode</span><input type="checkbox" id="op-s-privacy" '+(s.privacyMode?'checked':'')+' style="accent-color:#7c3aed"></label><button class="op-btn danger" id="op-s-clear" style="width:100%;font-size:12px">Clear All Data</button></div>';
+    html+='<div class="op-card"><div style="font-size:12px;font-weight:700;color:#4A5568;margin-bottom:10px;letter-spacing:.1em">PRIVACY - Free</div><label style="display:flex;justify-content:space-between;align-items:center;color:#4A5568;font-size:13px;margin-bottom:10px"><span>Privacy Mode</span><input type="checkbox" id="op-s-privacy" '+(s.privacyMode?'checked':'')+' style="accent-color:#7c3aed"></label><button class="op-btn danger" id="op-s-clear" style="width:100%;font-size:12px">Clear All Data</button></div>';
 
     // --- PRO FEATURES ---
-    html+='<div class="op-card"><div style="font-size:12px;font-weight:700;color:#9ca3af;margin-bottom:10px;letter-spacing:.1em">PRO FEATURES</div>'+['AI Replies (multilingual)','Smart Context (product-aware)','Brand Voice (your style)','Auto-Post without confirm'].map(f=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span style="color:#6b7280;font-size:13px">Locked: '+f+'</span><button class="op-btn ghost" style="padding:3px 8px;font-size:11px" onclick="orbitState.view=\'layer4\';renderView()">Upgrade</button></div>').join('')+'</div>';
+    html+='<div class="op-card"><div style="font-size:12px;font-weight:700;color:#4A5568;margin-bottom:10px;letter-spacing:.1em">PRO FEATURES</div>'+['AI Replies (multilingual)','Smart Context (product-aware)','Brand Voice (your style)','Auto-Post without confirm'].map(f=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span style="color:#4A5568;font-size:13px">Locked: '+f+'</span><button class="op-btn ghost" style="padding:3px 8px;font-size:11px" onclick="orbitState.view=\'layer4\';renderView()">Upgrade</button></div>').join('')+'</div>';
 
     // --- PLAN ---
-    html+='<div class="op-card" style="text-align:center"><div style="color:#9ca3af;font-size:12px;margin-bottom:8px">'+cr.plan+' Plan - '+cr.used+'/'+cr.freeLimit+' AI credits used</div><button class="op-btn primary" style="width:100%" onclick="orbitState.view=\'layer4\';renderView()">Upgrade to Pro - $19/mo</button></div>';
+    html+='<div class="op-card" style="text-align:center"><div style="color:#4A5568;font-size:12px;margin-bottom:8px">'+cr.plan+' Plan - '+cr.used+'/'+cr.freeLimit+' AI credits used</div><button class="op-btn primary" style="width:100%" onclick="orbitState.view=\'layer4\';renderView()">Upgrade to Pro - $19/mo</button></div>';
 
     body.innerHTML=html;
 
@@ -792,11 +824,11 @@ function renderLayer3(body) {
       const result=await saveCurrentProductContext();
       if(result.ok){
         btn.textContent='Saved';btn.style.background='#10b981';
-        if(status){status.textContent=result.message + ' ('+currentComments+' comments, '+currentRisks+' risks)';status.style.color='#5eead4';}
+        if(status){status.textContent=result.message + ' ('+currentComments+' comments, '+currentRisks+' risks)';status.style.color='#00f5d4';}
         setTimeout(()=>renderLayer3(body),1500);
       } else {
         btn.textContent='Error';btn.style.background='#ef4444';
-        if(status){status.textContent=result.message;status.style.color='#fca5a5';}
+        if(status){status.textContent=result.message;status.style.color='#4A5568';}
         setTimeout(()=>{btn.disabled=false;btn.textContent=isAlreadySaved?'Update Product':'Add This Product';btn.style.background='';},2000);
       }
     });
@@ -848,7 +880,7 @@ function renderLayer4(body) {
     const cr=r.orbitCredits||{used:0,freeLimit:20,isPro:false};
     const scopedComments = getScopedOrbitComments();
     const missed=scopedComments.filter(c=>c.type==='NON_ENGLISH').length, manual=scopedComments.filter(c=>c.replied).length;
-    body.innerHTML='<div style="text-align:center;padding:20px 0"><h2 style="color:#fff;margin:0 0 6px;font-size:20px">ORBIT Pro</h2><p style="color:#9ca3af;font-size:13px;margin:0 0 20px">What you missed this week:</p></div>'+(missed>0?'<div class="op-card" style="border-left:3px solid #ec4899"><span style="color:#ec4899;font-size:13px">'+missed+' non-English comment'+(missed>1?'s':'')+' waiting without reply</span></div>':'')+(manual>0?'<div class="op-card" style="border-left:3px solid #3b82f6"><span style="color:#93c5fd;font-size:13px">'+manual+' replies sent manually - could have been automated</span></div>':'')+'<div class="op-card"><table style="width:100%;border-collapse:collapse;font-size:13px"><tr style="border-bottom:1px solid rgba(255,255,255,.06)"><td style="padding:8px 0;color:#6b7280"></td><td style="padding:8px 0;color:#9ca3af;font-weight:600">Free</td><td style="padding:8px 0;color:#a78bfa;font-weight:600">Pro</td></tr>'+[['Replies','Templates','AI writes your voice'],['Languages','English','All languages'],['Mode','Suggest','Auto-post'],['Report','Basic','Deep insights']].map(([label,free,pro])=>'<tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:8px 0;color:#6b7280;font-size:12px">'+label+'</td><td style="padding:8px 0;color:#9ca3af">'+free+'</td><td style="padding:8px 0;color:#d1d5db">'+pro+'</td></tr>').join('')+'</table></div><div style="display:flex;flex-direction:column;gap:8px;margin-top:16px"><button class="op-btn primary" style="width:100%;padding:14px;font-size:15px" id="op-buy-pro">$19/month - 500 AI replies</button><button class="op-btn ghost" style="width:100%;padding:12px" id="op-buy-ltd">$59 once - 200 AI replies/month (LTD)</button></div><p style="text-align:center;color:#6b7280;font-size:11px;margin-top:12px">Pays for itself in the first launch week</p><div style="text-align:center;margin-top:16px"><button class="op-btn ghost" onclick="orbitState.view=\'layer0\';renderView()">Back to Dashboard</button></div>';
+    body.innerHTML='<div style="text-align:center;padding:20px 0"><h2 style="color:#fff;margin:0 0 6px;font-size:20px">ORBIT Pro</h2><p style="color:#4A5568;font-size:13px;margin:0 0 20px">What you missed this week:</p></div>'+(missed>0?'<div class="op-card" style="border-left:3px solid #ec4899"><span style="color:#ec4899;font-size:13px">'+missed+' non-English comment'+(missed>1?'s':'')+' waiting without reply</span></div>':'')+(manual>0?'<div class="op-card" style="border-left:3px solid #3b82f6"><span style="color:#4A5568;font-size:13px">'+manual+' replies sent manually - could have been automated</span></div>':'')+'<div class="op-card"><table style="width:100%;border-collapse:collapse;font-size:13px"><tr style="border-bottom:1px solid rgba(255,255,255,.06)"><td style="padding:8px 0;color:#4A5568"></td><td style="padding:8px 0;color:#4A5568;font-weight:600">Free</td><td style="padding:8px 0;color:#a78bfa;font-weight:600">Pro</td></tr>'+[['Replies','Templates','AI writes your voice'],['Languages','English','All languages'],['Mode','Suggest','Auto-post'],['Report','Basic','Deep insights']].map(([label,free,pro])=>'<tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:8px 0;color:#4A5568;font-size:12px">'+label+'</td><td style="padding:8px 0;color:#4A5568">'+free+'</td><td style="padding:8px 0;color:#4A5568">'+pro+'</td></tr>').join('')+'</table></div><div style="display:flex;flex-direction:column;gap:8px;margin-top:16px"><button class="op-btn primary" style="width:100%;padding:14px;font-size:15px" id="op-buy-pro">$19/month - 500 AI replies</button><button class="op-btn ghost" style="width:100%;padding:12px" id="op-buy-ltd">$59 once - 200 AI replies/month (LTD)</button></div><p style="text-align:center;color:#4A5568;font-size:11px;margin-top:12px">Pays for itself in the first launch week</p><div style="text-align:center;margin-top:16px"><button class="op-btn ghost" onclick="orbitState.view=\'layer0\';renderView()">Back to Dashboard</button></div>';
     body.querySelector('#op-buy-pro')?.addEventListener('click',()=>alert('Pro purchase flow coming soon! Connect LemonSqueezy to activate.'));
     body.querySelector('#op-buy-ltd')?.addEventListener('click',()=>alert('LTD purchase flow coming soon! One-time payment via LemonSqueezy.'));
   });
@@ -870,7 +902,7 @@ async function saveFailure(comment,reply,reason){return new Promise(r=>chrome.st
 function triggerWebhook(text,author,risk,platform){if(!cachedSettings.webhookEnabled||!cachedSettings.webhookUrl)return;const h=hashStr(text);if(webhookSent.has(h))return;webhookSent.add(h);chrome.runtime.sendMessage({action:'sendWebhook',url:cachedSettings.webhookUrl,payload:{text:'REFUND RISK! Platform: '+platform+' | Customer: '+author+' | Score: '+risk+'/100 | "'+text.substring(0,200)+'"'}});}
 const webhookSent=new Set();
 function updateFooter(){const scopedComments=getScopedOrbitComments();const replied=scopedComments.filter(c=>c.replied).length;const risks=scopedComments.filter(c=>c.risk>=50).length;const rate=scopedComments.length>0?Math.round((replied/scopedComments.length)*100):0;const e1=document.getElementById('op-time');if(e1)e1.textContent=fmtTime(replied*3);const e2=document.getElementById('op-risks');if(e2)e2.textContent=risks;const e3=document.getElementById('op-rate');if(e3)e3.textContent=rate;const statusEl=document.getElementById('orbit-status');if(statusEl){if(risks>0){statusEl.classList.add('alert');statusEl.innerHTML='<span class="status-icon">🚨</span><span class="status-text">'+risks+' Risk'+(risks>1?'s':'')+'</span>';}else{statusEl.classList.remove('alert');statusEl.innerHTML='<span class="status-icon">✅</span><span class="status-text">Protected</span>';}}refreshPanelProductLabel();}
-function exportFAQPage(faqs){const html='<!DOCTYPE html><html><head><title>FAQ</title><style>body{font-family:system-ui;max-width:700px;margin:40px auto;padding:20px;background:#0f0f1e;color:#e2e8f0}h1{color:#7c3aed}.q{background:#161625;padding:16px;border-radius:8px;margin-bottom:12px;border-left:3px solid #3b82f6}</style></head><body><h1>Frequently Asked Questions</h1>'+faqs.map(q=>'<div class="q"><strong>Q:</strong> '+esc(q.text||'')+'<br><small>- '+esc(q.author||'Customer')+'</small></div>').join('')+'<p style="color:#6b7280;text-align:center;margin-top:40px">Generated by ORBIT</p></body></html>';const blob=new Blob([html],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='orbit-faq.html';a.click();}
+function exportFAQPage(faqs){const html='<!DOCTYPE html><html><head><title>FAQ</title><style>body{font-family:system-ui;max-width:700px;margin:40px auto;padding:20px;background:#0f0f1e;color:#1B5E20}h1{color:#7c3aed}.q{background:#161625;padding:16px;border-radius:8px;margin-bottom:12px;border-left:3px solid #3b82f6}</style></head><body><h1>Frequently Asked Questions</h1>'+faqs.map(q=>'<div class="q"><strong>Q:</strong> '+esc(q.text||'')+'<br><small>- '+esc(q.author||'Customer')+'</small></div>').join('')+'<p style="color:#4A5568;text-align:center;margin-top:40px">Generated by ORBIT</p></body></html>';const blob=new Blob([html],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='orbit-faq.html';a.click();}
 function shareReport(st){const text='My ORBIT Launch Report:\n- '+st.repliesGenerated+' replies automated\n- '+st.risksCaught+' refund risks caught\n- '+fmtTime(st.timeSavedMinutes||0)+' saved\n\n-- Powered by ORBIT';navigator.clipboard?.writeText(text).then(()=>alert('Report copied to clipboard!')).catch(()=>alert(text));}
 
 // SECTION 6: ONBOARDING
@@ -880,7 +912,7 @@ function showOnboarding(){return;}
 // SECTION 7: CORE EXECUTION
 const injectedElements=new WeakSet();let orbitObserver=null,scanTimeout,routerInterval=null;
 async function bulkFill(){const btn=document.getElementById('op-autofill');if(btn){btn.textContent='Processing...';btn.disabled=true;}const unreplied=orbitComments.filter(c=>!c.replied&&c.type!=='NON_ENGLISH');for(const c of unreplied){if(!c.replyText)c.replyText=await generateFreeReply(c);if(c.element){const field=c.element.querySelector(getAdapter().sel.text);if(field)setTextareaValue(field,c.replyText);}c.replied=true;await incrementReplyStats(c.hash);await sleep(100);}await persistOrbitCommentFeed();if(btn){btn.textContent='Done!';btn.disabled=false;setTimeout(()=>{btn.textContent='Auto-Fill All 0';},2000);}updateWidgetBadge();if(orbitState.panelOpen)renderView();}
-function scanComments(){if(!isStorageReady||!cachedSettings.orbitAIEnabled)return;const containers=getContainers();let changed=false;containers.forEach(el=>{if(el.dataset.orbitCommentInjected==='true')return;const existingBadges=el.querySelectorAll('.orbit-bar-mini');if(existingBadges.length>1){existingBadges.forEach((badge,index)=>{if(index>0)badge.remove();});}const field=el.querySelector(getAdapter().sel.text);if(field){if(field.dataset.orbitInjected==='true')return;if(field.parentElement?.querySelector('.orbit-reply-assistant'))return;}if(injectedElements.has(el)||el.querySelector('.orbit-bar-mini'))return;const commentContentEl=el.querySelector('.comment-content');const commentText=(commentContentEl?.textContent||'').trim();const text=commentText||getCommentText(el);if(!text||text.length<5)return;injectedElements.add(el);el.dataset.orbitCommentInjected='true';if(field)field.dataset.orbitInjected='true';const author=getAuthor(el);const product=normalizeProductName(el.dataset.product||getActiveProduct()||cachedSettings.productName)||'All Products';const{type}=classify(text);const risk=riskScore(text);const hash=hashStr(product+author+text.substring(0,100));const priority=type==='NEGATIVE'?(risk>=50?100:90):type==='QUESTION'?60:type==='FEATURE'?40:type==='POSITIVE'?20:10;if(orbitComments.some(c=>c.hash===hash))return;orbitComments.push({text,author,product,type,risk,hash,priority,replied:false,replyText:'',element:el});const scopedCount=(product==='All Products'?orbitComments:orbitComments.filter(c=>c.product===product)).length;const mini=document.createElement('div');mini.className='orbit-bar-mini orbit-reply-assistant';mini.innerHTML='<span style="color:#00d4ff;font-size:10px;font-weight:600">●</span><span style="color:#9ca3af;font-size:10px">'+esc(product)+' • '+scopedCount+' comments</span><span style="background:'+(COLORS[type]||'#6b7280')+';color:#fff;padding:1px 6px;border-radius:3px;font-size:10px">'+type+'</span>'+(risk>0?'<span style="color:'+(risk>=50?'#ef4444':'#f59e0b')+';font-weight:700;font-size:10px">'+risk+'</span>':'');if(field&&field.parentElement)field.parentElement.insertBefore(mini,field);else el.appendChild(mini);if(risk>=50){el.style.borderLeft='3px solid #ef4444';el.style.boxShadow='0 0 12px rgba(239,68,68,.15)';triggerWebhook(text,author,risk,getAdapter().id);}else if(risk>0){el.style.borderLeft='3px solid #f59e0b';}if(type==='QUESTION'){chrome.storage.local.get('orbitFAQs',res=>{let faqs=res.orbitFAQs||[];if(!faqs.some(f=>f.text===text)){faqs.unshift({text,author,ts:Date.now()});faqs=faqs.slice(0,20);chrome.storage.local.set({orbitFAQs:faqs});}});}changed=true;});if(changed){orbitComments.sort((a,b)=>b.priority-a.priority);refreshPanelProductLabel();updateWidgetBadge();if(orbitState.panelOpen&&orbitState.view==='layer0')renderView();saveScanStats();persistOrbitCommentFeed();}}
+function scanComments(){if(!isStorageReady||!cachedSettings.orbitAIEnabled)return;const containers=getContainers();let changed=false;containers.forEach(el=>{if(el.dataset.orbitCommentInjected==='true')return;const existingBadges=el.querySelectorAll('.orbit-bar-mini');if(existingBadges.length>1){existingBadges.forEach((badge,index)=>{if(index>0)badge.remove();});}const field=el.querySelector(getAdapter().sel.text);if(field){if(field.dataset.orbitInjected==='true')return;if(field.parentElement?.querySelector('.orbit-reply-assistant'))return;}if(injectedElements.has(el)||el.querySelector('.orbit-bar-mini'))return;const commentContentEl=el.querySelector('.comment-content');const commentText=(commentContentEl?.textContent||'').trim();const text=commentText||getCommentText(el);if(!text||text.length<5)return;injectedElements.add(el);el.dataset.orbitCommentInjected='true';if(field)field.dataset.orbitInjected='true';const author=getAuthor(el);const product=normalizeProductName(el.dataset.product||getActiveProduct()||cachedSettings.productName)||'All Products';const{type}=classify(text);const risk=riskScore(text);const hash=hashStr(product+author+text.substring(0,100));const priority=type==='NEGATIVE'?(risk>=50?100:90):type==='QUESTION'?60:type==='FEATURE'?40:type==='POSITIVE'?20:10;if(orbitComments.some(c=>c.hash===hash))return;orbitComments.push({text,author,product,type,risk,hash,priority,replied:false,replyText:'',element:el});const scopedCount=(product==='All Products'?orbitComments:orbitComments.filter(c=>c.product===product)).length;const mini=document.createElement('div');mini.className='orbit-bar-mini orbit-reply-assistant';mini.innerHTML='<span style="color:#00f5d4;font-size:10px;font-weight:600">●</span><span style="color:#4A5568;font-size:10px">'+esc(product)+' • '+scopedCount+' comments</span><span style="background:'+(COLORS[type]||'#4A5568')+';color:#fff;padding:1px 6px;border-radius:3px;font-size:10px">'+type+'</span>'+(risk>0?'<span style="color:'+(risk>=50?'#ef4444':'#f59e0b')+';font-weight:700;font-size:10px">'+risk+'</span>':'');if(field&&field.parentElement)field.parentElement.insertBefore(mini,field);else el.appendChild(mini);if(risk>=50){el.style.borderLeft='3px solid #ef4444';el.style.boxShadow='0 0 12px rgba(239,68,68,.15)';triggerWebhook(text,author,risk,getAdapter().id);}else if(risk>0){el.style.borderLeft='3px solid #f59e0b';}if(type==='QUESTION'){chrome.storage.local.get('orbitFAQs',res=>{let faqs=res.orbitFAQs||[];if(!faqs.some(f=>f.text===text)){faqs.unshift({text,author,ts:Date.now()});faqs=faqs.slice(0,20);chrome.storage.local.set({orbitFAQs:faqs});}});}changed=true;});if(changed){orbitComments.sort((a,b)=>b.priority-a.priority);refreshPanelProductLabel();updateWidgetBadge();if(orbitState.panelOpen&&orbitState.view==='layer0')renderView();saveScanStats();persistOrbitCommentFeed();}}
 function saveScanStats(){chrome.storage.local.get(['orbitStats','orbitScannedHashes'],(r)=>{const st=r.orbitStats||{repliesGenerated:0,timeSavedMinutes:0,risksCaught:0,commentsAnalyzed:0};let hashes=r.orbitScannedHashes||[];let nc=0,nr=0;orbitComments.forEach(c=>{if(!hashes.includes(c.hash)){nc++;if(c.risk>=50)nr++;hashes.push(c.hash);}});if(nc===0)return;if(hashes.length>500)hashes=hashes.slice(-500);st.commentsAnalyzed=(st.commentsAnalyzed||0)+nc;st.risksCaught=(st.risksCaught||0)+nr;chrome.storage.local.set({orbitStats:st,orbitScannedHashes:hashes});});}
 function setupObserver(){orbitObserver=new MutationObserver(mutations=>{if(!isStorageReady||!cachedSettings.orbitAIEnabled)return;let hasNew=false;for(const m of mutations){if(m.type==='childList'){for(const n of m.addedNodes){if(n.nodeType!==1)continue;if(n.classList?.contains('orbit-bar-mini')||n.closest?.('.orbit-panel')||n.id==='orbit-panel'||n.id==='orbit-widget'||n.id==='orbit-onboarding')continue;hasNew=true;break;}}if(hasNew)break;}if(!hasNew)return;clearTimeout(scanTimeout);scanTimeout=setTimeout(scanComments,600);});if(document.body)orbitObserver.observe(document.body,{childList:true,subtree:true,attributes:false});}
 function startSPARouter(){routerInterval=setInterval(()=>{try{if(!isStorageReady)return;if(!chrome.runtime?.id){clearInterval(routerInterval);return;}scanComments();}catch(e){if(e.message?.includes('Extension context invalidated'))clearInterval(routerInterval);}},4000);document.addEventListener('click',e=>{const t=e.target.closest('a,button,[role="button"]');if(!t)return;const txt=(t.textContent||'').toLowerCase();if(txt.includes('comment')||txt.includes('review')||(t.href||'').includes('comment'))setTimeout(()=>{if(isStorageReady)scanComments();},1200);});}

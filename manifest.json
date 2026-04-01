@@ -22,7 +22,6 @@
     "https://*.lemonsqueezy.com/*",
     "https://*.shopify.com/*",
     "https://*.myshopify.com/*",
-    "http://localhost:*/*",
     "https://api.anthropic.com/*",
     "https://api.openai.com/*",
     "https://generativelanguage.googleapis.com/*",
@@ -47,8 +46,7 @@
         "https://app.lemonsqueezy.com/*",
         "https://*.lemonsqueezy.com/*",
         "https://*.shopify.com/*",
-        "https://*.myshopify.com/*",
-        "http://localhost:*/*"
+        "https://*.myshopify.com/*"
       ],
       "js": ["library.js", "content.js"],
       "css": ["styles.css"],

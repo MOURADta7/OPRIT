@@ -6,17 +6,17 @@
   --orbit-primary-light: #33ffea;
   --orbit-accent: #ff006e;
   --orbit-accent-dark: #e60062;
-  --orbit-bg: rgba(15, 23, 42, 0.6);
-  --orbit-bg-light: rgba(255, 255, 255, 0.08);
-  --orbit-bg-card: rgba(30, 41, 59, 0.4);
-  --orbit-text: #f8fafc;
-  --orbit-text-muted: #94a3b8;
-  --orbit-text-dim: #64748b;
+  --orbit-bg: rgba(10, 11, 15, 0.95);
+  --orbit-bg-light: rgba(255, 255, 255, 0.06);
+  --orbit-bg-card: rgba(20, 22, 30, 0.85);
+  --orbit-text: #FFFFFF;
+  --orbit-text-muted: #A0AEC0;
+  --orbit-text-dim: #CBD5E1;
   --orbit-success: #10b981;
   --orbit-warning: #f59e0b;
   --orbit-danger: #ef4444;
   --orbit-border: rgba(255, 255, 255, 0.1);
-  --orbit-border-dim: rgba(255, 255, 255, 0.05);
+  --orbit-border-dim: rgba(255, 255, 255, 0.08);
   --orbit-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   --orbit-shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.3);
   --orbit-radius: 20px;
@@ -36,12 +36,12 @@
 /* Main Widget */
 .orbit-widget {
   background: var(--orbit-bg);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
   border-radius: var(--orbit-radius);
   box-shadow: var(--orbit-shadow);
   width: 280px;
   overflow: hidden;
-  border: 1px solid var(--orbit-border-dim);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   position: relative;
 }
 
@@ -65,12 +65,12 @@
 
 .orbit-widget-header {
   background: var(--orbit-bg-light);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
   padding: 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--orbit-border-dim);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   position: relative;
 }
 
@@ -196,10 +196,10 @@
 .orbit-quick-stats {
   display: flex;
   padding: 12px 16px;
-  border-top: 1px solid var(--orbit-border-dim);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   gap: 16px;
   background: var(--orbit-bg-card);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
 }
 
 .stat-item {
@@ -232,10 +232,10 @@
   width: 380px;
   max-height: 80vh;
   background: var(--orbit-bg);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
   border-radius: var(--orbit-radius);
   box-shadow: var(--orbit-shadow);
-  border: 1px solid var(--orbit-border-dim);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -267,12 +267,12 @@
 
 .panel-header {
   background: var(--orbit-bg-light);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
   padding: 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--orbit-border-dim);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   position: relative;
 }
 
@@ -291,7 +291,7 @@
   overflow-y: auto;
   flex: 1;
   background: var(--orbit-bg-card);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
 }
 
 .hidden {
@@ -346,14 +346,14 @@
 .orbit-modal-content {
   position: relative;
   background: var(--orbit-bg);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
   border-radius: var(--orbit-radius);
   width: 90%;
   max-width: 500px;
   max-height: 80vh;
   overflow: hidden;
   box-shadow: var(--orbit-shadow);
-  border: 1px solid var(--orbit-border-dim);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   position: relative;
 }
 
@@ -394,17 +394,17 @@
   max-height: 80vh;
   overflow: hidden;
   box-shadow: var(--orbit-shadow);
-  border: 1px solid var(--orbit-border);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .orbit-modal-header {
   background: var(--orbit-bg-light);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
   padding: 16px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--orbit-border-dim);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .orbit-modal-header h3 {
@@ -452,14 +452,14 @@
   left: 50%;
   transform: translateX(-50%);
   background: var(--orbit-bg);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
   color: var(--orbit-text);
   padding: 14px 28px;
   border-radius: 12px;
   font-size: 14px;
   font-weight: 500;
   box-shadow: var(--orbit-shadow);
-  border: 1px solid var(--orbit-border-dim);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   z-index: 99999999;
   animation: orbit-toast-in 0.3s ease;
   position: relative;
@@ -508,8 +508,8 @@
 
 .metric-card {
   background: var(--orbit-bg-card);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--orbit-border-dim);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 16px;
   border-radius: 12px;
   text-align: center;
@@ -526,8 +526,8 @@
   display: block;
   font-size: 24px;
   font-weight: 700;
-  color: var(--orbit-primary);
-  text-shadow: 0 0 10px rgba(0, 245, 212, 0.3);
+  color: var(--orbit-text);
+  text-shadow: 0 0 10px rgba(0, 245, 212, 0.4);
 }
 
 .metric-label {
@@ -547,8 +547,8 @@
 
 .insight-card {
   background: var(--orbit-bg-card);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--orbit-border-dim);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 14px;
   padding: 16px;
   display: flex;
@@ -635,8 +635,8 @@
   margin-bottom: 20px;
   padding: 20px;
   background: var(--orbit-bg-card);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--orbit-border-dim);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   position: relative;
   overflow: hidden;
@@ -661,7 +661,7 @@
   font-size: 36px;
   font-weight: 700;
   color: var(--orbit-text);
-  text-shadow: 0 0 15px rgba(0, 245, 212, 0.3);
+  text-shadow: 0 0 15px rgba(0, 245, 212, 0.4);
 }
 
 .sentiment-score .label {
@@ -678,7 +678,17 @@
 
 .sentiment-score.negative .score {
   color: var(--orbit-danger);
-  text-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+  text-shadow: 0 0 20px rgba(239, 68, 68, 0.6), 0 0 40px rgba(255, 0, 110, 0.3);
+  animation: risk-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes risk-glow {
+  from {
+    text-shadow: 0 0 15px rgba(239, 68, 68, 0.5), 0 0 30px rgba(255, 0, 110, 0.2);
+  }
+  to {
+    text-shadow: 0 0 25px rgba(239, 68, 68, 0.7), 0 0 50px rgba(255, 0, 110, 0.4);
+  }
 }
 
 .keywords-section {
@@ -710,8 +720,8 @@
 
 .keyword-item {
   background: var(--orbit-bg-card);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--orbit-border-dim);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 12px 16px;
   display: flex;

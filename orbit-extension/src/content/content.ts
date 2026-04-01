@@ -1,6 +1,6 @@
 /**
- * Content Script - Injects ORBIT overlay into sales dashboards
- * Runs on supported platforms only
+ * Content Script - ORBIT "Bodyguard" Experience
+ * Zero-friction, action-oriented UI
  */
 
 import { PlatformDetector } from '../utils/platformDetector';
@@ -23,16 +23,21 @@ function detectPlatform(): PlatformType {
   return 'GENERIC';
 }
 
-function calculateRefundRisk(text: string, _type: string): { risk: number; isCritical: boolean } {
+function calculateRefundRisk(text: string): { risk: number; isCritical: boolean; isNegative: boolean } {
   const lowerText = text.toLowerCase();
   const platform = detectPlatform();
   
   let risk = 0;
+  let isNegative = false;
   
   const baseKeywords: { keyword: string; weight: number }[] = [
     { keyword: 'refund', weight: 30 },
     { keyword: '60 day', weight: 25 },
-    { keyword: 'lifetime', weight: 20 }
+    { keyword: 'lifetime', weight: 20 },
+    { keyword: 'money back', weight: 35 },
+    { keyword: 'not worth', weight: 25 },
+    { keyword: 'waste of', weight: 30 },
+    { keyword: 'disappointed', weight: 20 }
   ];
   
   const trustpilotKeywords: { keyword: string; weight: number }[] = [
@@ -52,6 +57,7 @@ function calculateRefundRisk(text: string, _type: string): { risk: number; isCri
   for (const { keyword, weight } of baseKeywords) {
     if (lowerText.includes(keyword)) {
       risk += weight;
+      isNegative = true;
     }
   }
   
@@ -59,6 +65,7 @@ function calculateRefundRisk(text: string, _type: string): { risk: number; isCri
     for (const { keyword, weight } of trustpilotKeywords) {
       if (lowerText.includes(keyword)) {
         risk += weight;
+        isNegative = true;
       }
     }
   }
@@ -67,6 +74,7 @@ function calculateRefundRisk(text: string, _type: string): { risk: number; isCri
     for (const { keyword, weight } of g2Keywords) {
       if (lowerText.includes(keyword)) {
         risk += weight;
+        isNegative = true;
       }
     }
   }
@@ -75,428 +83,221 @@ function calculateRefundRisk(text: string, _type: string): { risk: number; isCri
   
   return {
     risk,
-    isCritical: risk >= 50
+    isCritical: risk >= 50,
+    isNegative
   };
 }
 
-// Check if we're on a supported platform
 if (PlatformDetector.isSupported()) {
-  logger.info('ORBIT content script loaded on supported platform');
-  
-  // Initialize ORBIT
+  logger.info('ORBIT Bodyguard loaded on supported platform');
   initializeOrbit();
 } else {
   logger.info('Platform not supported, ORBIT inactive');
 }
 
-function highlightTier3Rows() {
-  const url = window.location.href;
-  const isCommentsPage = url.includes('/comments');
-  
-  if (isCommentsPage) return;
-  
-  const isSalesPage = url.includes('/sales') || document.querySelector('table');
-  if (!isSalesPage) return;
-  
-  const rows = document.querySelectorAll('tr');
-  rows.forEach((row) => {
-    if (row.textContent?.includes('Tier 3')) {
-      (row as HTMLElement).style.borderLeft = '3px solid #f59e0b';
-    }
-  });
-}
+let statusPill: HTMLElement | null = null;
+let riskCount = 0;
 
 function initializeOrbit() {
-  // Inject floating widget
-  injectWidget();
-  
-  // Inject settings panel
-  injectSettingsPanel();
-  
-  // Highlight Tier 3 rows on Sales page only
-  highlightTier3Rows();
-  
-  // Watch for dynamic content
+  injectStatusPill();
+  scanPageForRisks();
   observePageChanges();
-  
-  // Set up message listener
   setupMessageListener();
 }
 
-function injectWidget() {
-  // Create widget container
-  const widget = document.createElement('div');
-  widget.id = 'orbit-widget';
-  widget.innerHTML = `
-    <div style="
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 999999;
-      background: linear-gradient(135deg, #1a1f36 0%, #252b47 100%);
-      color: white;
-      padding: 16px;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      min-width: 200px;
-      border: 1px solid rgba(255,255,255,0.1);
-    ">
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" stroke="#00d4ff" stroke-width="2"/>
-          <circle cx="12" cy="12" r="4" fill="#00d4ff"/>
-        </svg>
-        <span style="font-weight: 700; font-size: 16px;">ORBIT</span>
-        <span style="
-          width: 8px;
-          height: 8px;
-          background: #51cf66;
-          border-radius: 50%;
-          margin-left: auto;
-        "></span>
-      </div>
-      
-      <div style="display: flex; flex-direction: column; gap: 8px;">
-        <button id="orbit-analytics" style="
-          padding: 10px 16px;
-          background: #252b47;
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 8px;
-          color: white;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        ">📊 Analytics</button>
-        
-        <button id="orbit-replies" style="
-          padding: 10px 16px;
-          background: #252b47;
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 8px;
-          color: white;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        ">💬 Replies</button>
-        
-        <button id="orbit-keywords" style="
-          padding: 10px 16px;
-          background: #252b47;
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 8px;
-          color: white;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        ">🔍 Keywords</button>
-
-        <button id="orbit-settings" style="
-          padding: 10px 16px;
-          background: #252b47;
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 8px;
-          color: white;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        ">⚙️ Settings</button>
-      </div>
-      
-      <div style="
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid rgba(255,255,255,0.1);
-        display: flex;
-        justify-content: space-around;
-        font-size: 11px;
-        color: #8b92a8;
-      ">
-        <div style="text-align: center;">
-          <div id="orbit-stat-responses" style="font-size: 18px; font-weight: 700; color: #00d4ff;">0</div>
-          <div>Responses</div>
-        </div>
-        <div style="text-align: center;">
-          <div id="orbit-stat-time" style="font-size: 18px; font-weight: 700; color: #00d4ff;">0h</div>
-          <div>Saved</div>
-        </div>
-      </div>
-    </div>
+function injectStatusPill() {
+  const existing = document.getElementById('orbit-status-pill');
+  if (existing) existing.remove();
+  
+  statusPill = document.createElement('div');
+  statusPill.id = 'orbit-status-pill';
+  statusPill.innerHTML = `
+    <span class="orbit-pill-dot"></span>
+    <span class="orbit-pill-text">You are safe</span>
   `;
   
-  document.body.appendChild(widget);
+  document.body.appendChild(statusPill);
   
-  // Add event listeners
-  widget.querySelector('#orbit-analytics')?.addEventListener('click', () => {
-    showAnalyticsPanel();
-  });
-  
-  widget.querySelector('#orbit-replies')?.addEventListener('click', () => {
-    scanForComments();
-  });
-  
-  widget.querySelector('#orbit-keywords')?.addEventListener('click', () => {
-    analyzeKeywords();
-  });
-  
-  widget.querySelector('#orbit-settings')?.addEventListener('click', () => {
-    injectSettingsPanel();
-  });
-  
-  // Update stats periodically
-  updateStats();
-  setInterval(updateStats, 5000);
+  injectStatusPillStyles();
 }
 
-async function updateStats() {
-  const responses = document.getElementById('orbit-stat-responses');
-  const time = document.getElementById('orbit-stat-time');
+function injectStatusPillStyles() {
+  if (document.getElementById('orbit-status-styles')) return;
   
-  if (responses && time) {
-    const stored = await chrome.storage.local.get(['responsesGenerated', 'timeSaved']);
-    responses.textContent = (stored.responsesGenerated || 0).toString();
-    time.textContent = Math.floor((stored.timeSaved || 0) / 60) + 'h';
-  }
-}
-
-function showAnalyticsPanel() {
-  // Create analytics panel
-  const panel = document.createElement('div');
-  panel.id = 'orbit-analytics-panel';
-  panel.innerHTML = `
-    <div style="
+  const styles = document.createElement('style');
+  styles.id = 'orbit-status-styles';
+  styles.textContent = `
+    #orbit-status-pill {
       position: fixed;
       top: 20px;
-      right: 260px;
-      width: 350px;
-      max-height: 80vh;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      left: 50%;
+      transform: translateX(-50%);
       z-index: 999999;
-      overflow: hidden;
       display: flex;
-      flex-direction: column;
-    ">
-      <div style="
-        padding: 16px;
-        background: #1a1f36;
-        color: white;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      ">
-        <h3 style="margin: 0; font-size: 16px;">📊 Sales Analytics</h3>
-        <button id="orbit-close-analytics" style="
-          background: none;
-          border: none;
-          color: white;
-          font-size: 20px;
-          cursor: pointer;
-        ">×</button>
-      </div>
-      <div style="padding: 16px; overflow-y: auto;">
-        <p style="color: #666;">Analytics will appear here...</p>
-      </div>
-    </div>
-  `;
-  
-  document.body.appendChild(panel);
-  
-  panel.querySelector('#orbit-close-analytics')?.addEventListener('click', () => {
-    panel.remove();
-  });
-}
-
-async function injectSettingsPanel() {
-  const existingPanel = document.getElementById('orbit-settings-panel');
-  if (existingPanel) {
-    existingPanel.remove();
-  }
-  
-  const stored = await chrome.storage.local.get('orbitProductContext');
-  const productContext = stored.orbitProductContext || { productName: '', shortDescription: '' };
-  
-  const panel = document.createElement('div');
-  panel.id = 'orbit-settings-panel';
-  panel.innerHTML = `
-    <div style="
-      position: fixed;
-      top: 20px;
-      right: 260px;
-      width: 380px;
-      max-height: 80vh;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-      z-index: 999999;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    ">
-      <div style="
-        padding: 16px;
-        background: #1a1f36;
-        color: white;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      ">
-        <h3 style="margin: 0; font-size: 16px;">⚙️ Product Settings</h3>
-        <button id="orbit-close-settings" style="
-          background: none;
-          border: none;
-          color: white;
-          font-size: 20px;
-          cursor: pointer;
-        ">×</button>
-      </div>
-      <div style="padding: 16px; overflow-y: auto;">
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #374151;">
-            Product Name
-          </label>
-          <input 
-            id="orbit-product-name" 
-            type="text" 
-            value="${productContext.productName || ''}"
-            placeholder="e.g., My Awesome App"
-            style="
-              width: 100%;
-              padding: 10px 12px;
-              border: 1px solid #d1d5db;
-              border-radius: 6px;
-              font-size: 14px;
-              box-sizing: border-box;
-            "
-          />
-        </div>
-        
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #374151;">
-            Short Description (1-2 sentences)
-          </label>
-          <textarea 
-            id="orbit-product-description" 
-            rows="3"
-            placeholder="e.g., A powerful tool that helps automate your workflow and save time."
-            style="
-              width: 100%;
-              padding: 10px 12px;
-              border: 1px solid #d1d5db;
-              border-radius: 6px;
-              font-size: 14px;
-              font-family: inherit;
-              resize: vertical;
-              box-sizing: border-box;
-            "
-          >${productContext.shortDescription || ''}</textarea>
-        </div>
-        
-        <button 
-          id="orbit-save-settings"
-          style="
-            width: 100%;
-            padding: 10px 16px;
-            background: #00d4ff;
-            color: #1a1f36;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-          "
-        >
-          Save Settings
-        </button>
-        
-        <div id="orbit-settings-message" style="
-          margin-top: 12px;
-          padding: 10px;
-          border-radius: 6px;
-          font-size: 13px;
-          display: none;
-        "></div>
-      </div>
-    </div>
-  `;
-  
-  document.body.appendChild(panel);
-  
-  panel.querySelector('#orbit-close-settings')?.addEventListener('click', () => {
-    panel.remove();
-  });
-  
-  panel.querySelector('#orbit-save-settings')?.addEventListener('click', async () => {
-    const productName = (panel.querySelector('#orbit-product-name') as HTMLInputElement)?.value || '';
-    const shortDescription = (panel.querySelector('#orbit-product-description') as HTMLTextAreaElement)?.value || '';
-    
-    await chrome.storage.local.set({
-      orbitProductContext: {
-        productName,
-        shortDescription
-      }
-    });
-    
-    const messageEl = panel.querySelector('#orbit-settings-message') as HTMLElement;
-    if (messageEl) {
-      messageEl.textContent = '✓ Settings saved successfully!';
-      messageEl.style.background = '#d1fae5';
-      messageEl.style.color = '#065f46';
-      messageEl.style.display = 'block';
-      
-      setTimeout(() => {
-        messageEl.style.display = 'none';
-      }, 3000);
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: rgba(16, 185, 129, 0.15);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 50px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      color: #10b981;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
     }
-  });
+    
+    #orbit-status-pill.danger {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #ef4444;
+      box-shadow: 0 4px 20px rgba(239, 68, 68, 0.25);
+      animation: orbit-danger-pulse 1.5s ease-in-out infinite;
+    }
+    
+    @keyframes orbit-danger-pulse {
+      0%, 100% { box-shadow: 0 4px 20px rgba(239, 68, 68, 0.25); }
+      50% { box-shadow: 0 4px 30px rgba(239, 68, 68, 0.45); }
+    }
+    
+    .orbit-pill-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+      transition: all 0.3s ease;
+    }
+    
+    #orbit-status-pill.danger .orbit-pill-dot {
+      background: #ef4444;
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+    }
+  `;
+  document.head.appendChild(styles);
 }
 
-function scanForComments() {
+function updateStatusPill(risksFound: number) {
+  if (!statusPill) return;
+  
+  const text = statusPill.querySelector('.orbit-pill-text');
+  
+  if (risksFound > 0) {
+    statusPill.classList.add('danger');
+    if (text) text.textContent = `${risksFound} Risk${risksFound > 1 ? 's' : ''} Detected`;
+  } else {
+    statusPill.classList.remove('danger');
+    if (text) text.textContent = 'You are safe';
+  }
+}
+
+function scanPageForRisks() {
   const comments = PlatformDetector.extractComments();
-  logger.info(`Found ${comments.length} comments`);
+  riskCount = 0;
   
-  comments.forEach((comment: Element, _index) => {
-    // Add reply button to each comment
-    if (!comment.querySelector('.orbit-reply-btn')) {
-      const replyBtn = document.createElement('button');
-      replyBtn.className = 'orbit-reply-btn';
-      replyBtn.textContent = '🤖 AI Reply';
-      replyBtn.style.cssText = `
-        margin-left: 8px;
-        padding: 6px 12px;
-        background: #00d4ff;
-        color: #1a1f36;
-        border: none;
-        border-radius: 6px;
-        font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-      `;
-      
-      replyBtn.addEventListener('click', () => {
-        generateReplyForComment(comment);
-      });
-      
-      comment.appendChild(replyBtn);
+  comments.forEach((comment) => {
+    const text = comment.textContent || '';
+    const { isCritical, isNegative } = calculateRefundRisk(text);
+    
+    if (isCritical || isNegative) {
+      riskCount++;
+      applyRiskStyling(comment as HTMLElement);
+      injectReplyButton(comment);
     }
   });
+  
+  updateStatusPill(riskCount);
 }
 
-async function generateReplyForComment(comment: Element) {
-  // Send message to background script
+function applyRiskStyling(element: HTMLElement) {
+  if (element.querySelector('.orbit-risk-glow')) return;
+  
+  element.classList.add('orbit-risk-glow');
+  
+  const glowStyles = document.createElement('style');
+  glowStyles.textContent = `
+    .orbit-risk-glow {
+      position: relative;
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0) !important;
+      transition: box-shadow 0.3s ease !important;
+    }
+    
+    .orbit-risk-glow:hover {
+      box-shadow: 0 0 20px rgba(255, 0, 110, 0.3), 0 0 40px rgba(239, 68, 68, 0.15) !important;
+    }
+    
+    .orbit-risk-glow::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: linear-gradient(180deg, #ff006e 0%, #ef4444 100%);
+      border-radius: 2px;
+    }
+  `;
+  document.head.appendChild(glowStyles);
+  
+  element.style.boxShadow = '0 0 15px rgba(255, 0, 110, 0.25), 0 0 30px rgba(239, 68, 68, 0.1)';
+}
+
+function injectReplyButton(comment: Element) {
+  if (comment.querySelector('.orbit-reply-ready-btn')) return;
+  
+  const btn = document.createElement('button');
+  btn.className = 'orbit-reply-ready-btn';
+  btn.innerHTML = '⚡ Reply Ready';
+  
+  const btnStyles = document.createElement('style');
+  btnStyles.textContent = `
+    .orbit-reply-ready-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 10px 18px;
+      background: linear-gradient(135deg, #ff006e 0%, #00d4ff 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(255, 0, 110, 0.3);
+      animation: orbit-btn-pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes orbit-btn-pulse {
+      0%, 100% { box-shadow: 0 4px 15px rgba(255, 0, 110, 0.3); }
+      50% { box-shadow: 0 4px 25px rgba(255, 0, 110, 0.5), 0 0 40px rgba(0, 212, 255, 0.2); }
+    }
+    
+    .orbit-reply-ready-btn:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 6px 25px rgba(255, 0, 110, 0.5);
+    }
+    
+    .orbit-reply-ready-btn:active {
+      transform: translateY(0) scale(0.98);
+    }
+  `;
+  document.head.appendChild(btnStyles);
+  
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    generateAndShowReply(comment);
+  });
+  
+  comment.appendChild(btn);
+}
+
+async function generateAndShowReply(comment: Element) {
   const commentText = comment.textContent || '';
   
   try {
@@ -510,130 +311,214 @@ async function generateReplyForComment(comment: Element) {
     });
     
     if (response.success) {
-      // Show reply modal
-      showReplyModal(comment, response.reply);
+      showReplyModal(response.reply);
     }
   } catch (error) {
     logger.error('Failed to generate reply:', error);
   }
 }
 
-function showReplyModal(_comment: Element, reply: string) {
-  const modal = document.createElement('div');
-  modal.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
-    z-index: 9999999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  `;
+function showReplyModal(reply: string) {
+  const existingModal = document.getElementById('orbit-reply-modal');
+  if (existingModal) existingModal.remove();
   
+  const modal = document.createElement('div');
+  modal.id = 'orbit-reply-modal';
   modal.innerHTML = `
-    <div style="
-      background: white;
-      border-radius: 12px;
-      padding: 24px;
-      max-width: 500px;
-      width: 90%;
-      max-height: 80vh;
-      overflow: auto;
-    ">
-      <h3 style="margin: 0 0 16px 0;">AI-Generated Reply</h3>
-      <textarea style="
-        width: 100%;
-        min-height: 120px;
-        padding: 12px;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        font-family: inherit;
-        margin-bottom: 16px;
-      ">${reply}</textarea>
-      <div style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button id="orbit-modal-cancel" style="
-          padding: 10px 20px;
-          background: #f3f4f6;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-        ">Cancel</button>
-        <button id="orbit-modal-copy" style="
-          padding: 10px 20px;
-          background: #00d4ff;
-          color: #1a1f36;
-          border: none;
-          border-radius: 6px;
-          font-weight: 600;
-          cursor: pointer;
-        ">Copy</button>
+    <div class="orbit-modal-backdrop"></div>
+    <div class="orbit-modal-content">
+      <div class="orbit-modal-header">
+        <span class="orbit-modal-icon">⚡</span>
+        <span>Reply Ready</span>
+        <button class="orbit-modal-close">&times;</button>
+      </div>
+      <div class="orbit-modal-body">
+        <textarea id="orbit-reply-text">${reply}</textarea>
+      </div>
+      <div class="orbit-modal-footer">
+        <button class="orbit-btn-cancel">Cancel</button>
+        <button class="orbit-btn-copy">Copy to Clipboard</button>
       </div>
     </div>
   `;
   
   document.body.appendChild(modal);
   
-  modal.querySelector('#orbit-modal-cancel')?.addEventListener('click', () => {
+  const modalStyles = document.createElement('style');
+  modalStyles.textContent = `
+    #orbit-reply-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    
+    .orbit-modal-backdrop {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+    }
+    
+    .orbit-modal-content {
+      position: relative;
+      width: 90%;
+      max-width: 480px;
+      background: rgba(20, 22, 30, 0.95);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      animation: orbit-modal-in 0.3s ease-out;
+    }
+    
+    @keyframes orbit-modal-in {
+      from { opacity: 0; transform: scale(0.95) translateY(20px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    
+    .orbit-modal-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, rgba(255, 0, 110, 0.15) 0%, rgba(0, 212, 255, 0.15) 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 15px;
+      font-weight: 700;
+      color: white;
+    }
+    
+    .orbit-modal-icon {
+      font-size: 18px;
+    }
+    
+    .orbit-modal-close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: #A0AEC0;
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0;
+    }
+    
+    .orbit-modal-close:hover {
+      color: white;
+    }
+    
+    .orbit-modal-body {
+      padding: 20px;
+    }
+    
+    #orbit-reply-text {
+      width: 100%;
+      min-height: 140px;
+      padding: 14px;
+      background: rgba(10, 11, 15, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      color: white;
+      font-size: 14px;
+      line-height: 1.6;
+      font-family: inherit;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    
+    #orbit-reply-text:focus {
+      outline: none;
+      border-color: rgba(0, 212, 255, 0.5);
+      box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+    }
+    
+    .orbit-modal-footer {
+      display: flex;
+      gap: 12px;
+      padding: 16px 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .orbit-btn-cancel {
+      flex: 1;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: #A0AEC0;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .orbit-btn-cancel:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+    }
+    
+    .orbit-btn-copy {
+      flex: 2;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #00f5d4 0%, #7c3aed 100%);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .orbit-btn-copy:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 212, 255, 0.4);
+    }
+  `;
+  document.head.appendChild(modalStyles);
+  
+  modal.querySelector('.orbit-modal-close')?.addEventListener('click', () => {
     modal.remove();
   });
   
-  modal.querySelector('#orbit-modal-copy')?.addEventListener('click', () => {
-    const textarea = modal.querySelector('textarea');
+  modal.querySelector('.orbit-modal-backdrop')?.addEventListener('click', () => {
+    modal.remove();
+  });
+  
+  modal.querySelector('.orbit-btn-cancel')?.addEventListener('click', () => {
+    modal.remove();
+  });
+  
+  modal.querySelector('.orbit-btn-copy')?.addEventListener('click', () => {
+    const textarea = document.getElementById('orbit-reply-text') as HTMLTextAreaElement;
     if (textarea) {
       navigator.clipboard.writeText(textarea.value);
-    }
-    modal.remove();
-  });
-  
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      modal.remove();
-    }
-  });
-}
-
-function analyzeKeywords() {
-  logger.info('Analyzing keywords...');
-  
-  const comments = PlatformDetector.extractComments();
-  let highRiskCount = 0;
-  
-  comments.forEach((comment) => {
-    const text = comment.textContent || '';
-    const { risk, isCritical } = calculateRefundRisk(text, 'review');
-    
-    if (isCritical) {
-      highRiskCount++;
-      (comment as HTMLElement).style.borderLeft = '3px solid #ef4444';
-    } else if (risk >= 25) {
-      (comment as HTMLElement).style.borderLeft = '3px solid #f59e0b';
+      const btn = modal.querySelector('.orbit-btn-copy') as HTMLButtonElement;
+      if (btn) {
+        btn.textContent = '✓ Copied!';
+        setTimeout(() => {
+          btn.textContent = 'Copy to Clipboard';
+          modal.remove();
+        }, 1500);
+      }
     }
   });
-  
-  logger.info(`Found ${highRiskCount} high-risk comments out of ${comments.length}`);
-  
-  const platform = detectPlatform();
-  logger.info(`Current platform: ${platform}`);
 }
 
 function observePageChanges() {
-  const observer = new MutationObserver((mutations) => {
-    // Check if new comments were added
-    const hasNewComments = mutations.some(mutation => 
-      Array.from(mutation.addedNodes).some(node => 
-        node.nodeType === 1 && (
-          (node as Element).matches?.('.comment, .review') ||
-          (node as Element).querySelector?.('.comment, .review')
-        )
-      )
-    );
-    
-    if (hasNewComments) {
-      setTimeout(scanForComments, 500);
-    }
+  const observer = new MutationObserver(() => {
+    setTimeout(scanPageForRisks, 500);
   });
   
   observer.observe(document.body, {
@@ -645,7 +530,7 @@ function observePageChanges() {
 function setupMessageListener() {
   chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     if (request.action === 'refreshUI') {
-      updateStats();
+      scanPageForRisks();
       sendResponse({ success: true });
     }
     return true;

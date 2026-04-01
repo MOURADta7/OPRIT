@@ -165,32 +165,17 @@ function setupEventListeners() {
   // Theme toggle
   document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
 
-  // Open Dashboard Panel
-  document.getElementById('btn-open-panel').addEventListener('click', async () => {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) {
-        const theme = document.documentElement.getAttribute('data-theme') || 'dark';
-        await chrome.tabs.sendMessage(tab.id, { action: 'openOrbitPanel' });
-        await chrome.tabs.sendMessage(tab.id, { action: 'themeChanged', theme: theme });
-        window.close();
-      }
-    } catch (e) {
-      console.error('ORBIT: Failed to open panel', e);
+  // Settings button - opens in-extension settings
+  document.getElementById('btn-settings').addEventListener('click', () => {
+    // Switch to settings tab within popup, or open settings panel
+    // For now, just show a message or navigate to settings tab
+    const statusTitle = document.getElementById('status-title');
+    const statusDesc = document.getElementById('status-desc');
+    if (statusTitle && statusDesc) {
+      statusTitle.textContent = 'Settings';
+      statusDesc.textContent = 'Configure ORBIT in the Settings tab';
     }
-  });
-
-  // View Report
-  document.getElementById('btn-view-report').addEventListener('click', async () => {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) {
-        await chrome.tabs.sendMessage(tab.id, { action: 'openReport' });
-        window.close();
-      }
-    } catch (e) {
-      console.error('ORBIT: Failed to open report', e);
-    }
+    // The popup already has a Settings tab, so user can navigate there
   });
 
   // Upgrade to Pro

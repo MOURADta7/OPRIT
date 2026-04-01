@@ -3,25 +3,25 @@
    ═══════════════════════════════════════════════════ */
 
 :root {
-  --brand: #00d4ff;
-  --brand-dark: #0099cc;
+  --brand: #00f5d4;
+  --brand-dark: #00c8b2;
   --accent: #7c3aed;
   --accent-soft: rgba(124, 58, 237, 0.15);
-  --bg-0: #0b0e17;
-  --bg-1: #111827;
-  --bg-2: #1e2235;
+  --bg-0: #0a0b0f;
+  --bg-1: rgba(20, 22, 30, 0.85);
+  --bg-2: #1a1b24;
   --bg-3: #2a2f45;
-  --text-0: #f1f5f9;
-  --text-1: #c0c7d6;
-  --text-2: #6b7a8d;
+  --text-0: #FFFFFF;
+  --text-1: #A0AEC0;
+  --text-2: #A0AEC0;
   --green: #10b981;
-  --red: #ef4444;
+  --red: #ff006e;
   --amber: #f59e0b;
-  --border: rgba(255,255,255,0.07);
-  --glow-cyan: rgba(0,212,255,0.12);
-  --glow-green: rgba(16,185,129,0.12);
-  --glow-purple: rgba(124,58,237,0.12);
-  --glow-amber: rgba(245,158,11,0.12);
+  --border: rgba(255,255,255,0.1);
+  --glow-cyan: rgba(0,245,212,0.2);
+  --glow-green: rgba(16,185,129,0.2);
+  --glow-purple: rgba(124,58,237,0.2);
+  --glow-amber: rgba(245,158,11,0.2);
   --radius: 12px;
   --radius-sm: 8px;
   --transition: 0.2s ease;
@@ -158,7 +158,7 @@ body {
   gap: 0;
   padding: 0 16px;
   margin-top: 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 
 .tab {
@@ -168,7 +168,7 @@ body {
   padding: 10px 14px;
   background: none;
   border: none;
-  color: var(--text-2);
+  color: #A0AEC0;
   font-size: 12px;
   font-weight: 600;
   font-family: inherit;
@@ -176,13 +176,13 @@ body {
   border-bottom: 2px solid transparent;
   transition: color var(--transition), border-color var(--transition);
 }
-.tab:hover { color: var(--text-1); }
+.tab:hover { color: #FFFFFF; }
 .tab.active {
-  color: var(--brand);
-  border-bottom-color: var(--brand);
+  color: #FFFFFF;
+  border-bottom-color: #00f5d4;
 }
 .tab svg { opacity: 0.6; }
-.tab.active svg { opacity: 1; stroke: var(--brand); }
+.tab.active svg { opacity: 1; stroke: #00f5d4; }
 
 /* ═══ TAB PANELS ═══ */
 .tab-panel {
@@ -209,11 +209,12 @@ body {
 
 .stat-card {
   background: var(--bg-1);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: var(--radius);
   padding: 16px 14px;
   text-align: center;
   transition: transform var(--transition), box-shadow var(--transition);
+  backdrop-filter: blur(12px);
 }
 .stat-card:hover { transform: translateY(-2px); }
 
@@ -246,10 +247,11 @@ body {
 /* ═══ CARDS ═══ */
 .card {
   background: var(--bg-1);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: var(--radius);
   padding: 16px;
   margin-bottom: 12px;
+  backdrop-filter: blur(12px);
 }
 
 .card-title {
